@@ -61,6 +61,8 @@ class Example extends PureComponent {
     this._onUpdate = this._onUpdate.bind(this)
     this.positionLoop = this.positionLoop.bind(this)
     this.axisChangeHandler = this.axisChangeHandler.bind(this)
+    this.connectHandler = this.connectHandler.bind(this)
+    this.disconnectHandler = this.disconnectHandler.bind(this)
 
     this.state = {
       width: 0,
@@ -84,11 +86,13 @@ class Example extends PureComponent {
         orientation: [0, 0, 0, 1],
         position: [0, 0, 0]
       },
+      hasGamepad: false,
       gamepad: {
         accelerationX: 0.0,
         accelerationY: 0.0,
         accelerationZ: 0.0
-      }
+      },
+      hasPosition: false
     }
   }
 
@@ -160,16 +164,22 @@ class Example extends PureComponent {
     })
 
     this._initVRDisplay()
-    window.requestAnimationFrame(this._onUpdate)
-    // window.requestAnimationFrame(this.positionLoop);
+    // window.requestAnimationFrame(this._onUpdate)
+    window.requestAnimationFrame(this.positionLoop)
   }
 
   connectHandler (gamepadIndex) {
     console.log(`Gamepad ${gamepadIndex} connected !`)
+    this.setState({
+      hasGamepad: true
+    })
   }
 
   disconnectHandler (gamepadIndex) {
     console.log(`Gamepad ${gamepadIndex} disconnected !`)
+    this.setState({
+      hasGamepad: false
+    })
   }
 
   buttonChangeHandler (buttonName, down) {
@@ -177,27 +187,27 @@ class Example extends PureComponent {
   }
 
   axisChangeHandler (axisName, value, previousValue) {
-    const { gamepad } = this.state;
-    const inc = 0.01;
+    const {gamepad} = this.state
+    const inc = 0.01
     switch (axisName) {
       case 'LeftStickX':
         if (value !== 0) {
-          gamepad.accelerationX += inc * value;
+          gamepad.accelerationX += inc * value
         } else {
-          gamepad.accelerationX = 0;
+          gamepad.accelerationX = 0
         }
-        break;
+        break
       case 'LeftStickY':
         if (value !== 0) {
-          gamepad.accelerationY += inc * value;
+          gamepad.accelerationY += inc * value
         } else {
-          gamepad.accelerationY = 0;
+          gamepad.accelerationY = 0
         }
-        break;
+        break
     }
     this.setState({
       gamepad
-    });
+    })
   }
 
   componentWillUnmount () {
@@ -282,7 +292,7 @@ class Example extends PureComponent {
       getPosition: d => d.position,
       getNormal: d => [1, 1, 1],
       // getColor: d => [255, 255, 255, 128],
-      radiusPixels: useSmallRadius ? 1 : 10
+      radiusPixels: useSmallRadius ? 4 : 10
     })
   }
 
@@ -295,20 +305,34 @@ class Example extends PureComponent {
 
     if (navigator && navigator.getVRDisplays) {
       navigator.getVRDisplays().then(displays => {
-        const vrDisplay = displays.find(d => d.isConnected)
+        const vrDisplay = displays[0]
         if (vrDisplay) {
-          this.setState({vrDisplay, vrEnabled: true})
+          const {hasPosition} = vrDisplay.capabilities
+          this.setState({vrDisplay, vrEnabled: true, hasPosition})
         }
       })
     }
   }
 
   _renderViewports () {
-    const {width, height, vrDisplay, emulatedPose} = this.state
+    const {width, height, vrDisplay, emulatedPose, hasPosition} = this.state
     const frameData = vrDisplay.isEmulated ? {} : new window.VRFrameData()
-    const gotFrameData = vrDisplay.isEmulated
-      ? vrDisplay.getFrameDataFromPose(frameData, emulatedPose)
-      : vrDisplay.getFrameData(frameData)
+    let gotFrameData = false
+    if (vrDisplay.isEmulated) {
+      gotFrameData = vrDisplay.getFrameDataFromPose(frameData, emulatedPose)
+    } else {
+      if (hasPosition) {
+        gotFrameData = vrDisplay.getFrameData(frameData)
+      } else {
+        const newFrameData = new window.VRFrameData();
+        vrDisplay.getFrameData(newFrameData)
+        const { orientation } = newFrameData.pose;
+        gotFrameData = vrDisplay.getFrameData(newFrameData);
+        const emulatedDisplay = new EmulatedVRDisplay();
+        emulatedPose.orientation = orientation;
+        gotFrameData = emulatedDisplay.getFrameDataFromPose(frameData, emulatedPose);
+      }
+    }
     if (gotFrameData) {
       return [
         new Viewport({
@@ -420,7 +444,6 @@ class Example extends PureComponent {
               <Gamepad
                 onConnect={this.connectHandler}
                 onDisconnect={this.disconnectHandler}
-                onButtonChange={this.buttonChangeHandler}
                 onAxisChange={this.axisChangeHandler}
               >
                 <div>Hi there</div>
@@ -438,22 +461,40 @@ class Example extends PureComponent {
     )
   }
 
-  positionLoop() {
-    const { emulatedPose, vrEnabled, gamepad } = this.state;
-    const { position } = emulatedPose;
-    console.log('gamepad', gamepad);
-    if(vrEnabled) {
-      position[0] += gamepad.accelerationX;
-      position[2] += gamepad.accelerationY;
+  positionLoop () {
+    const {emulatedPose, vrEnabled, hasGamepad, hasPosition, gamepad} = this.state
+    const {position, orientation} = emulatedPose
+    const offLimits = 0.7;
+    if (vrEnabled && hasGamepad && !hasPosition) {
+
+      if(gamepad.accelerationX > 0) {
+        if (position[0] < offLimits) {
+          position[0] += gamepad.accelerationX
+        }
+      } else if (gamepad.accelerationX < 0) {
+        if (position[0] > -offLimits) {
+          position[0] += gamepad.accelerationX
+        }
+      }
+      if(gamepad.accelerationY > 0) {
+        if (position[1] < offLimits) {
+          position[1] += gamepad.accelerationY
+        }
+      } else if (gamepad.accelerationY < 0) {
+        if (position[1] > -offLimits) {
+          position[1] += gamepad.accelerationY
+        }
+      }
 
       this.setState({
         emulatedPose: {
           ...emulatedPose,
           ...position
         }
-      });
+      })
     }
-    requestAnimationFrame(this.positionLoop);
+    this.forceUpdate()
+    requestAnimationFrame(this.positionLoop)
   }
 
   render () {
@@ -461,6 +502,7 @@ class Example extends PureComponent {
     if (width <= 0 || height <= 0) {
       return null
     }
+
 
     return (
       <div>

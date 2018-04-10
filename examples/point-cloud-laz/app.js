@@ -86,12 +86,16 @@ class Example extends PureComponent {
   componentDidMount() {
     const {points} = this.state;
 
-    const skip = 10;
-    loadLazFile(`${DATA_REPO}/${FILE_PATH}`).then(rawData => {
+    const skip = 100;
+    //    loadLazFile(`${DATA_REPO}/${FILE_PATH}`).then(rawData => {
+    loadLazFile(`./indoor.laz`).then(rawData => {
       parseLazData(rawData, skip, (decoder, progress) => {
         for (let i = 0; i < decoder.pointsCount; i++) {
           const {color, position} = decoder.getPoint(i);
           points.push({color, position});
+          if (i % 1000) {
+            console.log('> ', {color, position});
+          }
         }
 
         if (progress >= 1) {

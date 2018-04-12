@@ -12,7 +12,7 @@ function getScale({min, max}) {
 
 export default class DeckGLOverlay extends Component {
   render() {
-    const {viewport, resolution, showAxis, equation} = this.props;
+    const {viewport, viewports, resolution, showAxis, equation} = this.props;
 
     const layers = equation
       ? [
@@ -40,6 +40,16 @@ export default class DeckGLOverlay extends Component {
           })
         ]
       : [];
+
+    if(viewports) {
+      return (<DeckGL
+        width={viewport.width}
+        height={viewport.height}
+        viewports={viewports}
+        layers={layers}
+        // onWebGLInitialized={this._onInitialized}
+      />);
+    }
 
     return (
       <DeckGL width={viewport.width} height={viewport.height} viewport={viewport} layers={layers} />

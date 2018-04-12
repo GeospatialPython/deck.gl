@@ -9,7 +9,9 @@
     "deck.gl": "^5.0.0",
     "luma.gl": "^5.0.0",
     "react": "^16.2.0",
-    "react-dom": "^16.2.0"
+    "react-dom": "^16.2.0",
+    "react-gamepad": "^1.0.3",
+    "webvr-polyfill": "^0.10.5"
   },
   "devDependencies": {
     "buble-loader": "^0.4.0",

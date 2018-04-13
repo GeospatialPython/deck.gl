@@ -24,6 +24,9 @@ import AxesLayer from './plot-layer/axes-layer'
 import SurfaceLayer from './plot-layer/surface-layer'
 
 import { Vector3, clamp } from 'math.gl'
+import Quaternion from './math/Quaternion'
+import Transform from './math/Transform'
+import Vec3 from './math/Vec3'
 
 import { scaleLinear } from 'd3-scale'
 
@@ -77,7 +80,7 @@ class Example extends PureComponent {
     this._onClick = this._onClick.bind(this)
     this.setOrientation = this.setOrientation.bind(this)
     this.moveForward = this.moveForward.bind(this)
-    // this._initVRDisplay = this._initVRDisplay.bind(this)
+    //  this._initVRDisplay = this._initVRDisplay.bind(this)
 
     this.state = {
       width: 0,
@@ -95,7 +98,7 @@ class Example extends PureComponent {
         minDistance: 0.5,
         maxDistance: 3
       },
-      vrDisplay: null,
+      vrDisplay: new EmulatedVRDisplay(),
       vrEnabled: false,
       emulatedPose: {
         orientation: [0, 0, 0, 1],
@@ -111,6 +114,7 @@ class Example extends PureComponent {
       hasPosition: false,
     }
     window.instance = this
+    window.math = {Quaternion, Transform, Vec3}
   }
 
   setOrientation (a) {
@@ -419,7 +423,8 @@ class Example extends PureComponent {
   _initVRDisplay () {
     /* eslint-disable no-unused-vars */
     const polyfill = new WebVRPolyfill({
-      PROVIDE_MOBILE_VRDISPLAY: true
+      PROVIDE_MOBILE_VRDISPLAY: true,
+      DPDB_URL: './vr/dpdb.json',
     })
     /* eslint-disable no-unused-vars */
 
@@ -508,7 +513,10 @@ class Example extends PureComponent {
       color: [255, 255, 255, 128],
       pickable: true, // Boolean(this._onHover),
       onHover: this._onHover,
-      onClick: this._onClick
+      onClick: this._onClick,
+      xTitle: 'Rushi',
+      yTitle: 'Siddharth',
+      zTitle: 'Rahul',
     })
   }
 

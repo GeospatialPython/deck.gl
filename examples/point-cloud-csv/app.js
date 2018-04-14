@@ -28,12 +28,12 @@ import Quaternion from './math/Quaternion'
 import Transform from './math/Transform'
 import Vec3 from './math/Vec3'
 
-import { scaleLinear } from 'd3-scale'
+import { scaleLinear, scaleLog } from 'd3-scale'
 
 const DATA_REPO = 'https://raw.githubusercontent.com/uber-common/deck.gl-data/master'
 const FILE_PATH = 'examples/point-cloud-laz/indoor.laz'
 
-function normalize (points) {
+function normalizePosition (points) {
   let xMin = Infinity
   let yMin = Infinity
   let zMin = Infinity
@@ -62,6 +62,16 @@ function normalize (points) {
   }
 }
 
+function normalizeArray (min, max, nmin = 0.0, nmax = 1.0) {
+  const delta = max - min
+  return val => (((val - min) / delta) * (nmax - nmin)) + nmin
+}
+
+function normalize (val, min, max, nmin = 0.0, nmax = 1.0) {
+  const delta = max - min
+  return (((val - min) / delta) * (nmax - nmin)) + nmin
+}
+
 class Example extends PureComponent {
   constructor (props) {
     super(props)
@@ -79,7 +89,10 @@ class Example extends PureComponent {
     this._onHover = this._onHover.bind(this)
     this._onClick = this._onClick.bind(this)
     this.setOrientation = this.setOrientation.bind(this)
-    this.moveForward = this.moveForward.bind(this)
+    this.getScaleX = this.getScaleX.bind(this)
+    this.getScaleY = this.getScaleY.bind(this)
+    this.getScaleZ = this.getScaleZ.bind(this)
+    this.getScaleS = this.getScaleS.bind(this)
     //  this._initVRDisplay = this._initVRDisplay.bind(this)
 
     this.state = {
@@ -101,20 +114,29 @@ class Example extends PureComponent {
       vrDisplay: new EmulatedVRDisplay(),
       vrEnabled: false,
       emulatedPose: {
-        orientation: [0, 0, 0, 1],
-        position: [0, 0, 0],
+        orientation: [0, 0, 0, 0],
+        position: [0, 0, 1],
         firstOrientation: null
       },
       hasGamepad: false,
       gamepad: {
-        accelerationX: 0.0,
-        accelerationY: 0.0,
+        leftAxisX: 0.0,
+        leftAxisY: 0.0,
         accelerationZ: 0.0
       },
       hasPosition: false,
+      scale: {x: [-0.5, 0.5], y: [-0.5, 0.5], z: [-0.5, 0.5], s: [1, 10]},
+      range: {x: [0, 1], y: [0, 1], z: [0, 1]}
     }
     window.instance = this
     window.math = {Quaternion, Transform, Vec3}
+    console.log('normalize', normalize(100, 1, 1000, -10, 10))
+    console.log('scaleLinear', this.dnormalize(100))
+  }
+
+  dnormalize (value) {
+    return (
+      scaleLinear().domain([1, 1000]).range([-10, 10]))(value)
   }
 
   setOrientation (a) {
@@ -129,70 +151,81 @@ class Example extends PureComponent {
     }
   }
 
-  moveForward (step) {
-    const {orientation, position} = this.state.emulatedPose
-
-    const positionVector = new Vector3(...position)
-
-    step = step || 0.1
-
-    console.log('positionVector', positionVector.toString())
-    console.log('positionVector.add', positionVector)
-
-    // this.setState({
-    //   ...emulatedPose,
-    // })
-    return positionVector
-  }
-
   componentWillMount () {
     window.addEventListener('resize', this._onResize)
     this._onResize()
   }
 
   componentDidMount () {
-    const {points} = this.state
+    const {getScaleX, getScaleY, getScaleZ, getScaleS} = this
+    const {points, range} = this.state
 
-    const url = './datasets/3.csv'
-    const colors = [
-      [0, 176, 240],
-      [255, 0, 0],
-      [255, 192, 0],
-      [255, 255, 0],
-      [0, 255, 0]]
-
-    const attributePreferences = {
-      x: ['x', '"x"', '\'x\''],
-      y: ['y', '"y"', '\'y\''],
-      z: ['z', '"z"', '\'z\'']
-    }
+    const url = './datasets/4.csv'
 
     Papa.parse(url, {
       download: true,
       complete: csv => {
         const data = csv.data
         const headers = data[0]
-
+        console.log('data\n', data)
         const x = 0
         const y = 1
         const z = 2
-        const size = 3
+        const s = 3
         const r = 4
         const g = 5
         const b = 6
         const type = headers.length - 1
 
+        let xMin = Infinity, xMax = -Infinity
+        let yMin = Infinity, yMax = -Infinity
+        let zMin = Infinity, zMax = -Infinity
+        let bMin = Infinity, bMax = -Infinity
+        let sMin = Infinity, sMax = -Infinity
+
         for (let i = 1; i < data.length; i++) {
           const point = data[i]
-          const color = [point[r] * 255, point[g] * 255, point[b] * 255].concat(
-            [point[size]])
-          const position = [point[x], point[y], point[z]]
-          // const color = colors[Math.round(point[type]) % colors.length].concat([255])
-          // console.log(color);
-          points.push({color, position, size: point[size]})
+          xMin = Math.min(xMin, point[x])
+          yMin = Math.min(yMin, point[y])
+          zMin = Math.min(zMin, point[z])
+
+          bMin = Math.min(bMin, point[b])
+          sMin = Math.min(sMin, point[s])
+
+          xMax = Math.max(xMax, point[x])
+          yMax = Math.max(yMax, point[y])
+          zMax = Math.max(zMax, point[z])
+
+          bMax = Math.max(bMax, point[b])
+          sMax = Math.max(sMax, point[s])
         }
 
-        normalize(points)
+        range.x = [xMin, xMax]
+        range.y = [yMin, yMax]
+        range.z = [zMin, zMax]
+        range.s = [sMin, sMax]
+
+        const colorMultiplier = bMax > 2 ? 1.0 : 255
+
+        for (let i = 1; i < data.length; i++) {
+          const point = data[i]
+          const color = [
+            point[r] * colorMultiplier,
+            point[g] * colorMultiplier,
+            point[b] * colorMultiplier]
+          //.concat([(normalize(point[s], sMin, sMax, 1.0, 10.0))]);
+            .concat(getScaleS({min: sMin, max: sMax})(point[s]))
+
+          const position = [
+            getScaleX({min: xMin, max: xMax})(point[x]),
+            getScaleY({min: yMin, max: yMax})(point[y]),
+            getScaleZ({min: zMin, max: zMax})(point[z])
+          ]
+
+          points.push({color, position, size: point[s]})
+        }
+
+        // normalizePosition(points)
 
         this.setState({points, progress: 1})
       }
@@ -255,7 +288,7 @@ class Example extends PureComponent {
         const o = [0, 0, 0, 0]
         const e = Euler.fromQuaternion(a, 'XYZ')
         out = [e.x, e.y, e.z, 0]
-        //getAxisAngle(o, a);
+        // getAxisAngle(o, a);
         return e.map(v => v * 180 / Math.PI)
       }
 
@@ -302,7 +335,72 @@ class Example extends PureComponent {
   }
 
   buttonChangeHandler (buttonName, down) {
+    const {gamepad, emulatedPose} = this.state
+    const inc = 0.01
     console.log(buttonName, down)
+    switch (buttonName) {
+      case 'X':
+        if (down) {
+          gamepad.rightAxisX += inc * -1
+        } else {
+          gamepad.rightAxisX = 0
+        }
+        break
+      case 'B':
+        if (down) {
+          gamepad.rightAxisX += inc
+        } else {
+          gamepad.rightAxisX = 0
+        }
+        break
+      case 'Y':
+        if (down) {
+          gamepad.rightAxisY += inc
+        } else {
+          gamepad.rightAxisY = 0
+        }
+        break
+      case 'A':
+        if (down) {
+          gamepad.rightAxisY += inc * -1
+        } else {
+          gamepad.rightAxisY = 0
+        }
+        break
+      case 'RS':
+        if (down) {
+          emulatedPose.orientation = [0, 0, 0, 1]
+          emulatedPose.position = [0, 0, 0]
+        } else {
+          gamepad.rightAxisY = 0
+        }
+        break
+    }
+  }
+
+  _axisChangeHandler (axisName, value, previousValue) {
+    const {gamepad} = this.state
+    const inc = 0.01
+    console.log(axisName, value)
+    switch (axisName) {
+      case 'LeftStickX':
+        if (value !== 0) {
+          gamepad.leftAxisX += inc * value
+        } else {
+          gamepad.leftAxisX = 0
+        }
+        break
+      case 'LeftStickY':
+        if (value !== 0) {
+          gamepad.leftAxisY += inc * value
+        } else {
+          gamepad.leftAxisY = 0
+        }
+        break
+    }
+    this.setState({
+      gamepad
+    })
   }
 
   axisChangeHandler (axisName, value, previousValue) {
@@ -312,16 +410,23 @@ class Example extends PureComponent {
     switch (axisName) {
       case 'LeftStickX':
         if (value !== 0) {
-          gamepad.accelerationX += inc * value
+          gamepad.leftAxisX += inc * value
         } else {
-          gamepad.accelerationX = 0
+          gamepad.leftAxisX = 0
         }
         break
       case 'LeftStickY':
         if (value !== 0) {
-          gamepad.accelerationY += inc * value
+          gamepad.leftAxisY += inc * value
         } else {
-          gamepad.accelerationY = 0
+          gamepad.leftAxisY = 0
+        }
+        break
+      case 'RightStickY':
+        if (value !== 0) {
+          gamepad.rightAxisZ += inc * value
+        } else {
+          gamepad.rightAxisZ = 0
         }
         break
     }
@@ -332,6 +437,26 @@ class Example extends PureComponent {
 
   componentWillUnmount () {
     window.removeEventListener('resize', this._onResize)
+  }
+
+  getScaleX ({min, max}) {
+    const {scale} = this.state
+    return scaleLinear().domain([min, max]).range(scale.x)
+  }
+
+  getScaleY ({min, max}) {
+    const {scale} = this.state
+    return scaleLinear().domain([min, max]).range(scale.y)
+  }
+
+  getScaleZ ({min, max}) {
+    const {scale} = this.state
+    return scaleLog().domain([min, max]).range(scale.z)
+  }
+
+  getScaleS ({min, max}) {
+    const {scale} = this.state
+    return scaleLinear().domain([min, max]).range(scale.s)
   }
 
   _onResize () {
@@ -411,20 +536,22 @@ class Example extends PureComponent {
       coordinateSystem: COORDINATE_SYSTEM.IDENTITY,
       getPosition: d => d.position,
       // getSize: d => d.size,
-      getNormal: d => {
-        return [1, 1, 1]
-      },
+      getNormal: d => d.position.map(Math.abs).map(Math.sqrt),
       // getColor: d => [255, 255, 255, 128],
       radiusPixels: useSmallRadius ? 10 : 10,
       pickable: true
     })
   }
 
+  setNormal (d) {
+    return d.map(Math.sqrt)
+  }
+
   _initVRDisplay () {
     /* eslint-disable no-unused-vars */
     const polyfill = new WebVRPolyfill({
       PROVIDE_MOBILE_VRDISPLAY: true,
-      DPDB_URL: './vr/dpdb.json',
+      DPDB_URL: './vr/dpdb.json'
     })
     /* eslint-disable no-unused-vars */
 
@@ -432,7 +559,7 @@ class Example extends PureComponent {
       navigator.getVRDisplays().then(displays => {
         const vrDisplay = displays[0]
         if (vrDisplay) {
-          const {hasPosition} = vrDisplay.capabilities;
+          const {hasPosition} = vrDisplay.capabilities
           this.setState({vrDisplay, vrEnabled: true, hasPosition})
         }
       })
@@ -445,7 +572,7 @@ class Example extends PureComponent {
     let gotFrameData = false
     if (vrDisplay.isEmulated) {
       gotFrameData = vrDisplay.getFrameDataFromPose(frameData, emulatedPose)
-      //} else if (hasPosition) {
+      // } else if (hasPosition) {
       //  gotFrameData = vrDisplay.getFrameData(frameData)
     } else {
       const newFrameData = new window.VRFrameData()
@@ -456,7 +583,7 @@ class Example extends PureComponent {
       const emulatedDisplay = new EmulatedVRDisplay()
       emulatedPose.orientation = orientation
       gotFrameData = emulatedDisplay.getFrameDataFromPose(frameData,
-      emulatedPose)
+        emulatedPose)
     }
     if (!emulatedPose.firstOrientation) {
       emulatedPose.firstOrientation = Array.from(emulatedPose.orientation)
@@ -492,18 +619,14 @@ class Example extends PureComponent {
   }
 
   plotLayer () {
+    const {getScaleX, getScaleY, getScaleZ} = this
     const {points} = this.state
-    const equation = (x, y) => Math.sin(x * x + y * y) * x / Math.PI
-
-    function getScale ({min, max}) {
-      return scaleLinear().domain([min, max]).range([-0.5, 0.5])
-    }
 
     return new PlotLayer({
       getColor: (x, y, z) => [40, z * 128 + 128, 160, 128],
-      getXScale: getScale,
-      getYScale: getScale,
-      getZScale: getScale,
+      getXScale: getScaleX,
+      getYScale: getScaleZ,
+      getZScale: getScaleY,
       points,
       // vCount: resolution,
       drawAxes: true,
@@ -514,9 +637,11 @@ class Example extends PureComponent {
       pickable: true, // Boolean(this._onHover),
       onHover: this._onHover,
       onClick: this._onClick,
-      xTitle: 'Rushi',
-      yTitle: 'Siddharth',
-      zTitle: 'Rahul',
+      xTitle: 'GDP',
+      yTitle: 'Life Expectancy',
+      zTitle: 'Population',
+      xTickFormat: x => (x.toFixed(2)),
+      labelHidden: false
     })
   }
 
@@ -645,27 +770,27 @@ class Example extends PureComponent {
     )
   }
 
-  positionLoop () {
+  /*positionLoop () {
     const {emulatedPose, vrEnabled, hasGamepad, hasPosition, gamepad} = this.state
     const {position, orientation} = emulatedPose
     const offLimits = 0.7
     if (vrEnabled && hasGamepad && !hasPosition) {
-      if (gamepad.accelerationX > 0) {
+      if (gamepad.leftAxisX > 0) {
         if (position[0] < offLimits) {
-          position[0] += gamepad.accelerationX
+          position[0] += gamepad.leftAxisX
         }
-      } else if (gamepad.accelerationX < 0) {
+      } else if (gamepad.leftAxisX < 0) {
         if (position[0] > -offLimits) {
-          position[0] += gamepad.accelerationX
+          position[0] += gamepad.leftAxisX
         }
       }
-      if (gamepad.accelerationY > 0) {
+      if (gamepad.leftAxisY > 0) {
         if (position[1] < offLimits) {
-          position[1] += gamepad.accelerationY
+          position[1] += gamepad.leftAxisY
         }
-      } else if (gamepad.accelerationY < 0) {
+      } else if (gamepad.leftAxisY < 0) {
         if (position[1] > -offLimits) {
-          position[1] += gamepad.accelerationY
+          position[1] += gamepad.leftAxisY
         }
       }
       if (gamepad.accelerationZ > 0) {
@@ -678,6 +803,116 @@ class Example extends PureComponent {
         }
       }
 
+      this.setState({
+        emulatedPose: {
+          ...emulatedPose,
+          ...position
+        }
+      })
+    }
+    this.forceUpdate()
+    requestAnimationFrame(this.positionLoop)
+  }*/
+
+  assertVector (v) {
+    return Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z))
+  }
+
+  positionLoop () {
+    const {emulatedPose, vrEnabled, hasGamepad, hasPosition, gamepad} = this.state
+    const {position, orientation} = emulatedPose
+    const offLimits = 5.7
+    if (vrEnabled && hasGamepad && !hasPosition) {
+      if (gamepad.leftAxisX > 0) {
+        // if (position[0] < offLimits) {
+        const worldVector = new Vec3(...position)
+        const positionVector = new Vec3(0, 0, 0)
+        positionVector.x += 1
+        const rotationQuaternion = new Quaternion(...Array.from(orientation))
+        const resultVector = new Vec3(0, 0, 0)
+        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
+          positionVector, resultVector)
+        console.log('resultVector X+', resultVector,
+          this.assertVector(resultVector))
+        position[0] += Math.abs(gamepad.leftAxisX) * resultVector.x
+        position[1] += Math.abs(gamepad.leftAxisX) * resultVector.y
+        position[2] += Math.abs(gamepad.leftAxisX) * resultVector.z
+        // }
+      } else if (gamepad.leftAxisX < 0) {
+        // if (position[0] > -offLimits) {
+        const worldVector = new Vec3(...position)
+        const positionVector = new Vec3(0, 0, 0)
+        positionVector.x -= 1
+        const rotationQuaternion = new Quaternion(...Array.from(orientation))
+        const resultVector = new Vec3(0, 0, 0)
+        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
+          positionVector, resultVector)
+        console.log('resultVector X-', resultVector,
+          this.assertVector(resultVector))
+        position[0] += Math.abs(gamepad.leftAxisX) * resultVector.x
+        position[1] += Math.abs(gamepad.leftAxisX) * resultVector.y
+        position[2] += Math.abs(gamepad.leftAxisX) * resultVector.z
+        // }
+      }
+      if (gamepad.leftAxisY > 0) {
+        // if (position[2] < offLimits) {
+        const worldVector = new Vec3(...position)
+        const positionVector = new Vec3(0, 0, 0)
+        positionVector.z += 1
+        const rotationQuaternion = new Quaternion(...Array.from(orientation))
+
+        const resultVector = new Vec3(0, 0, 0)
+        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
+          positionVector, resultVector)
+        console.log('resultVector Y+', resultVector,
+          this.assertVector(resultVector))
+        position[0] += Math.abs(gamepad.leftAxisY) * resultVector.x
+        position[1] += Math.abs(gamepad.leftAxisY) * resultVector.y
+        position[2] += Math.abs(gamepad.leftAxisY) * resultVector.z
+        // }
+      } else if (gamepad.leftAxisY < 0) {
+        // if (position[2] > -offLimits) {
+        const worldVector = new Vec3(...position)
+        const positionVector = new Vec3(0, 0, 0)
+        positionVector.z -= 1
+        const rotationQuaternion = new Quaternion(...Array.from(orientation))
+        const resultVector = new Vec3(0, 0, 0)
+        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
+          positionVector, resultVector)
+        console.log('resultVector Y-', resultVector,
+          this.assertVector(resultVector))
+        position[0] += Math.abs(gamepad.leftAxisY) * resultVector.x
+        position[1] += Math.abs(gamepad.leftAxisY) * resultVector.y
+        position[2] += Math.abs(gamepad.leftAxisY) * resultVector.z
+        // }
+      }
+      if (gamepad.rightAxisX > 0) {
+        if (position[0] < offLimits) {
+          position[0] += gamepad.rightAxisX
+        }
+      } else if (gamepad.rightAxisX < 0) {
+        if (position[0] > -offLimits) {
+          position[0] += gamepad.rightAxisX
+        }
+      }
+      if (gamepad.rightAxisY > 0) {
+        if (position[1] < offLimits) {
+          position[1] += gamepad.rightAxisY
+        }
+      } else if (gamepad.rightAxisY < 0) {
+        if (position[1] > -offLimits) {
+          position[1] += gamepad.rightAxisY
+        }
+      }
+      if (gamepad.rightAxisZ > 0) {
+        if (position[2] < offLimits) {
+          position[2] += gamepad.rightAxisZ
+        }
+      } else if (gamepad.rightAxisZ < 0) {
+        if (position[2] > -offLimits) {
+          position[2] += gamepad.rightAxisZ
+        }
+      }
       this.setState({
         emulatedPose: {
           ...emulatedPose,

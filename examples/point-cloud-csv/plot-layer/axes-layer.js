@@ -149,7 +149,8 @@ export default class AxesLayer extends Layer {
           (xRange[0] + xRange[1]) / 2,
           (zRange[0] + zRange[1]) / 2,
           (yRange[0] + yRange[1]) / 2
-        ]
+        ],
+        labelHidden: false
       });
 
       attributeManager.invalidateAll();
@@ -170,7 +171,7 @@ export default class AxesLayer extends Layer {
 
   draw({uniforms, moduleParameters}) {
     const {gridDims, gridCenter, modelsByName, labelTexture} = this.state;
-    const {fontSize, color, padding} = this.props;
+    const {fontSize, color, padding, labelHidden} = this.props;
 
     if (labelTexture) {
       const baseUniforms = {
@@ -178,7 +179,8 @@ export default class AxesLayer extends Layer {
         gridDims,
         gridCenter,
         gridOffset: padding,
-        strokeColor: color
+        strokeColor: color,
+        labelHidden: labelHidden ? 0.0 : 1.0
       };
 
       if (moduleParameters) {

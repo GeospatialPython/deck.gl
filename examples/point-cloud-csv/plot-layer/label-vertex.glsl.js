@@ -34,6 +34,7 @@ uniform float gridOffset;
 uniform vec3 labelWidths;
 uniform float fontSize;
 uniform float labelHeight;
+uniform float labelHidden;
 uniform vec2 labelTextureDim;
 
 varying vec2 vTexCoords;
@@ -79,7 +80,9 @@ void main(void) {
 
   // do not draw grid line in front of the graph
   // do not draw label behind the graph
-  shouldDiscard = frontFacing(gridLineNormal) + (1.0 - frontFacing(gridVertexOffset));
+  shouldDiscard = frontFacing(gridLineNormal) + (1.0 - labelHidden); 
+  //shouldDiscard = labelHidden;
+  // + (1.0 - frontFacing(gridVertexOffset));
 
   // get bounding box of texture in pixels
   //  +----------+----------+----------+

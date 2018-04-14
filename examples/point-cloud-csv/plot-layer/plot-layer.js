@@ -139,7 +139,8 @@ export default class PlotLayer extends CompositeLayer {
           padding: this.props.axesPadding,
           color: this.props.axesColor,
           visible: this.props.drawAxes,
-          pickable: false
+          pickable: false,
+          labelHidden: this.props.labelHidden
         })
       )
     ];

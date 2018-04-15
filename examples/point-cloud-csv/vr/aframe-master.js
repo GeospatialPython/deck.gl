@@ -61511,6 +61511,7 @@ module.exports={
   "format": 1,
   "last_updated": "2017-06-01T22:33:42Z",
   "devices": [
+  {"type":"android","rules":[{"mdmh":"OnePlus/*/ONEPLUS A5000/*"},{"ua":"OPR1.170623.032"}],"dpi":[403.411,399.737],"bw":3,"ac":1000},
     {
       "type": "android",
       "rules": [
@@ -63052,7 +63053,7 @@ var Util = _dereq_('../util.js');
 
 // Online DPDB URL.
 var ONLINE_DPDB_URL =
-  'https://dpdb.webvr.rocks/dpdb.json';
+  './dpdb.json';
 
 /**
  * Calculates device parameters based on the DPDB (Device Parameter Database).
@@ -63160,6 +63161,7 @@ Dpdb.prototype.calcDeviceParams_ = function() {
     for (var j = 0; j < device.rules.length; j++) {
       var rule = device.rules[j];
       if (this.matchRule_(rule, userAgent, width, height)) {
+		console.log('Device matched:', rule)
         matched = true;
         break;
       }
@@ -81270,7 +81272,6 @@ THREE.VREffect = function( renderer, onError ) {
 	// VR presentation
 
 	var canvas = renderer.domElement;
-	console.log('VR domElement canvas', renderer.domElement);
 	var defaultLeftBounds = [ 0.0, 0.0, 0.5, 1.0 ];
 	var defaultRightBounds = [ 0.5, 0.0, 0.5, 1.0 ];
 

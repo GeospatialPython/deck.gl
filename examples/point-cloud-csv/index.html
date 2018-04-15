@@ -13,6 +13,7 @@
         margin:0;
         padding:0;
         overflow:hidden;
+        background-image: url('vr/puydesancy.jpg');
       }
       .tooltip {
         position: absolute;
@@ -24,9 +25,20 @@
         z-index: 9;
         pointer-events: none;
       }
+      a-scene {
+
+      }
     </style>
+    <script src='https://cdn.jsdelivr.net/npm/webvr-polyfill@latest/build/webvr-polyfill.js'></script>
+    <script src="vr/aframe-master.js"></script>
   </head>
   <body/>
+<!--    <a-scene>
+      <a-sky src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/sechelt.jpg" rotation="0 -130 0"></a-sky>
+
+      <a-text font="kelsonsans" value="Puy de Sancy, France" width="6" position="-2.5 0.25 -1.5"
+              rotation="0 15 0"></a-text>
+    </a-scene>-->
     <script src='bundle.js'></script>
   </body>
 </html>

@@ -171,4 +171,6 @@ export default class EmulatedVRDisplay {
 
     return matrix;
   }
+
+  requestAnimationFrame(callback) {}
 }

@@ -13,17 +13,13 @@ const {OrbitController} = experimental
 
 import { setParameters } from 'luma.gl'
 
-import WebVRPolyfill from 'webvr-polyfill'
+// import WebVRPolyfill from 'webvr-polyfill'
 import EmulatedVRDisplay from './vr/emulated-vr-display'
 
 import Papa from 'papaparse'
 import { Gamepad } from 'react-gamepad'
 
 import PlotLayer from './plot-layer'
-import AxesLayer from './plot-layer/axes-layer'
-import SurfaceLayer from './plot-layer/surface-layer'
-
-import { Vector3, clamp } from 'math.gl'
 import Quaternion from './math/Quaternion'
 import Transform from './math/Transform'
 import Vec3 from './math/Vec3'
@@ -32,6 +28,8 @@ import { scaleLinear, scaleLog } from 'd3-scale'
 
 const DATA_REPO = 'https://raw.githubusercontent.com/uber-common/deck.gl-data/master'
 const FILE_PATH = 'examples/point-cloud-laz/indoor.laz'
+
+import { LineLayer } from 'deck.gl'
 
 function normalizePosition (points) {
   let xMin = Infinity
@@ -81,6 +79,7 @@ class Example extends PureComponent {
     this._onResize = this._onResize.bind(this)
     this._onUpdate = this._onUpdate.bind(this)
     this.positionLoop = this.positionLoop.bind(this)
+    this._renderViewports = this._renderViewports.bind(this)
     this.axisChangeHandler = this.axisChangeHandler.bind(this)
     this.connectHandler = this.connectHandler.bind(this)
     this.disconnectHandler = this.disconnectHandler.bind(this)
@@ -118,15 +117,17 @@ class Example extends PureComponent {
         position: [0, 0, 1],
         firstOrientation: null
       },
+      resetOrientation: { value: 0 },
       hasGamepad: false,
       gamepad: {
-        leftAxisX: 0.0,
-        leftAxisY: 0.0,
+        cameraAxisX: 0.0,
+        cameraAxisY: 0.0,
         accelerationZ: 0.0
       },
       hasPosition: false,
       scale: {x: [-0.5, 0.5], y: [-0.5, 0.5], z: [-0.5, 0.5], s: [1, 10]},
-      range: {x: [0, 1], y: [0, 1], z: [0, 1]}
+      range: {x: [0, 1], y: [0, 1], z: [0, 1]},
+      vrViewports: this.getDefaultViewport(100, 100)
     }
     window.instance = this
     window.math = {Quaternion, Transform, Vec3}
@@ -316,7 +317,7 @@ class Example extends PureComponent {
     this._initVRDisplay()
     // window.requestAnimationFrame(this._onUpdate)
     // this.forceUpdate();
-    window.requestAnimationFrame(this.positionLoop)
+    window.requestAnimationFrame(this._renderViewports)
 
   }
 
@@ -335,72 +336,31 @@ class Example extends PureComponent {
   }
 
   buttonChangeHandler (buttonName, down) {
-    const {gamepad, emulatedPose} = this.state
+    const {gamepad, emulatedPose, resetOrientation} = this.state
     const inc = 0.01
     console.log(buttonName, down)
     switch (buttonName) {
-      case 'X':
-        if (down) {
-          gamepad.rightAxisX += inc * -1
-        } else {
-          gamepad.rightAxisX = 0
-        }
-        break
-      case 'B':
-        if (down) {
-          gamepad.rightAxisX += inc
-        } else {
-          gamepad.rightAxisX = 0
-        }
-        break
       case 'Y':
         if (down) {
-          gamepad.rightAxisY += inc
+          gamepad.cameraAxisZ += inc
         } else {
-          gamepad.rightAxisY = 0
+          gamepad.cameraAxisZ = 0
         }
         break
       case 'A':
         if (down) {
-          gamepad.rightAxisY += inc * -1
+          gamepad.cameraAxisZ += inc * -1
         } else {
-          gamepad.rightAxisY = 0
+          gamepad.cameraAxisZ = 0
         }
         break
       case 'RS':
         if (down) {
-          emulatedPose.orientation = [0, 0, 0, 1]
           emulatedPose.position = [0, 0, 0]
-        } else {
-          gamepad.rightAxisY = 0
+          resetOrientation.value = 0
         }
         break
     }
-  }
-
-  _axisChangeHandler (axisName, value, previousValue) {
-    const {gamepad} = this.state
-    const inc = 0.01
-    console.log(axisName, value)
-    switch (axisName) {
-      case 'LeftStickX':
-        if (value !== 0) {
-          gamepad.leftAxisX += inc * value
-        } else {
-          gamepad.leftAxisX = 0
-        }
-        break
-      case 'LeftStickY':
-        if (value !== 0) {
-          gamepad.leftAxisY += inc * value
-        } else {
-          gamepad.leftAxisY = 0
-        }
-        break
-    }
-    this.setState({
-      gamepad
-    })
   }
 
   axisChangeHandler (axisName, value, previousValue) {
@@ -410,16 +370,16 @@ class Example extends PureComponent {
     switch (axisName) {
       case 'LeftStickX':
         if (value !== 0) {
-          gamepad.leftAxisX += inc * value
+          gamepad.cameraAxisX += inc * value
         } else {
-          gamepad.leftAxisX = 0
+          gamepad.cameraAxisX = 0
         }
         break
       case 'LeftStickY':
         if (value !== 0) {
-          gamepad.leftAxisY += inc * value
+          gamepad.cameraAxisY += inc * value
         } else {
-          gamepad.leftAxisY = 0
+          gamepad.cameraAxisY = 0
         }
         break
       case 'RightStickY':
@@ -471,7 +431,7 @@ class Example extends PureComponent {
   _onInitialized (gl) {
     setParameters(gl, {
       // clearColor: [0.01, 0.01, 0.04, 1]
-      clearColor: [0.07, 0.14, 0.19, 1]
+      // clearColor: [0.07, 0.14, 0.19, 0]
       // blendFunc: [gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA],
     })
   }
@@ -549,10 +509,15 @@ class Example extends PureComponent {
 
   _initVRDisplay () {
     /* eslint-disable no-unused-vars */
-    const polyfill = new WebVRPolyfill({
-      PROVIDE_MOBILE_VRDISPLAY: true,
-      DPDB_URL: './vr/dpdb.json'
-    })
+    if(typeof WebVRPolyfill !== 'undefined') {
+      const polyfill = new WebVRPolyfill({
+        PROVIDE_MOBILE_VRDISPLAY: true,
+        DPDB_URL: './vr/dpdb.json'
+      })
+      console.warn('WebVRPolyfill is available.')
+    } else {
+      console.warn('WebVRPolyfill is not available.')
+    }
     /* eslint-disable no-unused-vars */
 
     if (navigator && navigator.getVRDisplays) {
@@ -579,35 +544,59 @@ class Example extends PureComponent {
       vrDisplay.getFrameData(newFrameData)
       const {orientation} = newFrameData.pose
       gotFrameData = vrDisplay.getFrameData(frameData)
-//      console.log('gotFrameData', gotFrameData)
+
       const emulatedDisplay = new EmulatedVRDisplay()
-      emulatedPose.orientation = orientation
+      emulatedPose.orientation = orientation;
       gotFrameData = emulatedDisplay.getFrameDataFromPose(frameData,
         emulatedPose)
     }
-    if (!emulatedPose.firstOrientation) {
+    if (emulatedPose && !emulatedPose.firstOrientation && emulatedPose.orientation) {
+      console.log('emul', emulatedPose);
+      this.positionLoop() ;
       emulatedPose.firstOrientation = Array.from(emulatedPose.orientation)
       console.log('First Orientation:', emulatedPose.firstOrientation)
     }
     if (gotFrameData) {
-      return [
-        new Viewport({
-          x: 0,
-          width: width / 2,
-          height,
-          viewMatrix: frameData.leftViewMatrix,
-          projectionMatrix: frameData.leftProjectionMatrix
-        }),
-        new Viewport({
-          x: width / 2,
-          width: width / 2,
-          height,
-          viewMatrix: frameData.rightViewMatrix,
-          projectionMatrix: frameData.rightProjectionMatrix
-        })
-      ]
+      this.setState({
+        vrViewports: [
+          new Viewport({
+            x: 0,
+            width: width / 2,
+            height,
+            viewMatrix: frameData.leftViewMatrix,
+            projectionMatrix: frameData.leftProjectionMatrix
+          }),
+          new Viewport({
+            x: width / 2,
+            width: width / 2,
+            height,
+            viewMatrix: frameData.rightViewMatrix,
+            projectionMatrix: frameData.rightProjectionMatrix
+          })
+        ]
+      })
+      vrDisplay.requestAnimationFrame(this._renderViewports)
+    } else {
+      this.setState({
+        vrViewports: this.getDefaultViewport(width, height)
+      })
+      requestAnimationFrame(this._renderViewports)
     }
-    return new Viewport({width, height})
+  }
+
+  getDefaultViewport(width, height) {
+    return [
+      new Viewport({
+        x: 0,
+        width: width / 2,
+        height
+      }),
+      new Viewport({
+        x: width / 2,
+        width: width / 2,
+        height
+      })
+    ]
   }
 
   _toggleDisplayMode () {
@@ -663,14 +652,14 @@ class Example extends PureComponent {
   }
 
   _renderDeckGLCanvas () {
-    const {width, height, viewport, vrEnabled, hoverInfo} = this.state
+    const {width, height, viewport, vrEnabled, hoverInfo, vrViewports} = this.state
 
     if (vrEnabled) {
       return (
         <DeckGL
           width={width}
           height={height}
-          viewports={this._renderViewports()}
+          viewports={vrViewports}
           layers={[this.plotLayer(), this._renderCsvPointCloudLayer(true)]}
           onWebGLInitialized={this._onInitialized}
           onLayerClick={this._onClick}
@@ -722,10 +711,12 @@ class Example extends PureComponent {
         >
           {this.state.progress < 1 ? (
             <div>
-              <div>This example might not work on mobile devices due to browser
+              <div>This example might not work on mobile devices due to
+                browser
                 limitations.
               </div>
-              <div>Please try checking it with a desktop machine instead.</div>
+              <div>Please try checking it with a desktop machine instead.
+              </div>
               <div>{`Loading ${progress}%`}</div>
             </div>
           ) : (
@@ -761,7 +752,8 @@ class Example extends PureComponent {
           ) : (
             <div>
               <div>No VR Device found.</div>
-              <a onClick={this._toggleDisplayMode.bind(this)}>Enter stereoscopic
+              <a onClick={this._toggleDisplayMode.bind(this)}>Enter
+                stereoscopic
                 view.</a>
             </div>
           )}
@@ -769,50 +761,6 @@ class Example extends PureComponent {
       </div>
     )
   }
-
-  /*positionLoop () {
-    const {emulatedPose, vrEnabled, hasGamepad, hasPosition, gamepad} = this.state
-    const {position, orientation} = emulatedPose
-    const offLimits = 0.7
-    if (vrEnabled && hasGamepad && !hasPosition) {
-      if (gamepad.leftAxisX > 0) {
-        if (position[0] < offLimits) {
-          position[0] += gamepad.leftAxisX
-        }
-      } else if (gamepad.leftAxisX < 0) {
-        if (position[0] > -offLimits) {
-          position[0] += gamepad.leftAxisX
-        }
-      }
-      if (gamepad.leftAxisY > 0) {
-        if (position[1] < offLimits) {
-          position[1] += gamepad.leftAxisY
-        }
-      } else if (gamepad.leftAxisY < 0) {
-        if (position[1] > -offLimits) {
-          position[1] += gamepad.leftAxisY
-        }
-      }
-      if (gamepad.accelerationZ > 0) {
-        if (position[2] < offLimits) {
-          position[2] += gamepad.accelerationZ
-        }
-      } else if (gamepad.accelerationZ < 0) {
-        if (position[2] > -offLimits) {
-          position[2] += gamepad.accelerationZ
-        }
-      }
-
-      this.setState({
-        emulatedPose: {
-          ...emulatedPose,
-          ...position
-        }
-      })
-    }
-    this.forceUpdate()
-    requestAnimationFrame(this.positionLoop)
-  }*/
 
   assertVector (v) {
     return Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z))
@@ -823,95 +771,39 @@ class Example extends PureComponent {
     const {position, orientation} = emulatedPose
     const offLimits = 5.7
     if (vrEnabled && hasGamepad && !hasPosition) {
-      if (gamepad.leftAxisX > 0) {
-        // if (position[0] < offLimits) {
-        const worldVector = new Vec3(...position)
-        const positionVector = new Vec3(0, 0, 0)
-        positionVector.x += 1
-        const rotationQuaternion = new Quaternion(...Array.from(orientation))
-        const resultVector = new Vec3(0, 0, 0)
-        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
-          positionVector, resultVector)
-        console.log('resultVector X+', resultVector,
-          this.assertVector(resultVector))
-        position[0] += Math.abs(gamepad.leftAxisX) * resultVector.x
-        position[1] += Math.abs(gamepad.leftAxisX) * resultVector.y
-        position[2] += Math.abs(gamepad.leftAxisX) * resultVector.z
-        // }
-      } else if (gamepad.leftAxisX < 0) {
-        // if (position[0] > -offLimits) {
-        const worldVector = new Vec3(...position)
-        const positionVector = new Vec3(0, 0, 0)
-        positionVector.x -= 1
-        const rotationQuaternion = new Quaternion(...Array.from(orientation))
-        const resultVector = new Vec3(0, 0, 0)
-        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
-          positionVector, resultVector)
-        console.log('resultVector X-', resultVector,
-          this.assertVector(resultVector))
-        position[0] += Math.abs(gamepad.leftAxisX) * resultVector.x
-        position[1] += Math.abs(gamepad.leftAxisX) * resultVector.y
-        position[2] += Math.abs(gamepad.leftAxisX) * resultVector.z
-        // }
+      const rotationQuaternion = new Quaternion(...Array.from(orientation))
+      if (gamepad.cameraAxisX > 0) {
+        const resultVector = rotationQuaternion.vmult(new Vec3(1, 0, 0));
+        position[0] += Math.abs(gamepad.cameraAxisX) * resultVector.x
+        position[1] += Math.abs(gamepad.cameraAxisX) * resultVector.y
+        position[2] += Math.abs(gamepad.cameraAxisX) * resultVector.z
+      } else if (gamepad.cameraAxisX < 0) {
+        const resultVector = rotationQuaternion.vmult(new Vec3(-1, 0, 0));
+        position[0] += Math.abs(gamepad.cameraAxisX) * resultVector.x
+        position[1] += Math.abs(gamepad.cameraAxisX) * resultVector.y
+        position[2] += Math.abs(gamepad.cameraAxisX) * resultVector.z
       }
-      if (gamepad.leftAxisY > 0) {
-        // if (position[2] < offLimits) {
-        const worldVector = new Vec3(...position)
-        const positionVector = new Vec3(0, 0, 0)
-        positionVector.z += 1
-        const rotationQuaternion = new Quaternion(...Array.from(orientation))
-
-        const resultVector = new Vec3(0, 0, 0)
-        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
-          positionVector, resultVector)
-        console.log('resultVector Y+', resultVector,
-          this.assertVector(resultVector))
-        position[0] += Math.abs(gamepad.leftAxisY) * resultVector.x
-        position[1] += Math.abs(gamepad.leftAxisY) * resultVector.y
-        position[2] += Math.abs(gamepad.leftAxisY) * resultVector.z
-        // }
-      } else if (gamepad.leftAxisY < 0) {
-        // if (position[2] > -offLimits) {
-        const worldVector = new Vec3(...position)
-        const positionVector = new Vec3(0, 0, 0)
-        positionVector.z -= 1
-        const rotationQuaternion = new Quaternion(...Array.from(orientation))
-        const resultVector = new Vec3(0, 0, 0)
-        Transform.vectorToLocalFrame(worldVector, rotationQuaternion,
-          positionVector, resultVector)
-        console.log('resultVector Y-', resultVector,
-          this.assertVector(resultVector))
-        position[0] += Math.abs(gamepad.leftAxisY) * resultVector.x
-        position[1] += Math.abs(gamepad.leftAxisY) * resultVector.y
-        position[2] += Math.abs(gamepad.leftAxisY) * resultVector.z
-        // }
+      if (gamepad.cameraAxisY > 0) {
+        const resultVector = rotationQuaternion.vmult(new Vec3(0, 1, 0));
+        position[0] += Math.abs(gamepad.cameraAxisY) * resultVector.x
+        position[1] += Math.abs(gamepad.cameraAxisY) * resultVector.y
+        position[2] += Math.abs(gamepad.cameraAxisY) * resultVector.z
+      } else if (gamepad.cameraAxisY < 0) {        
+        const resultVector = rotationQuaternion.vmult(new Vec3(0, -1, 0));
+        position[0] += Math.abs(gamepad.cameraAxisY) * resultVector.x
+        position[1] += Math.abs(gamepad.cameraAxisY) * resultVector.y
+        position[2] += Math.abs(gamepad.cameraAxisY) * resultVector.z
       }
-      if (gamepad.rightAxisX > 0) {
-        if (position[0] < offLimits) {
-          position[0] += gamepad.rightAxisX
-        }
-      } else if (gamepad.rightAxisX < 0) {
-        if (position[0] > -offLimits) {
-          position[0] += gamepad.rightAxisX
-        }
-      }
-      if (gamepad.rightAxisY > 0) {
-        if (position[1] < offLimits) {
-          position[1] += gamepad.rightAxisY
-        }
-      } else if (gamepad.rightAxisY < 0) {
-        if (position[1] > -offLimits) {
-          position[1] += gamepad.rightAxisY
-        }
-      }
-      if (gamepad.rightAxisZ > 0) {
-        if (position[2] < offLimits) {
-          position[2] += gamepad.rightAxisZ
-        }
-      } else if (gamepad.rightAxisZ < 0) {
-        if (position[2] > -offLimits) {
-          position[2] += gamepad.rightAxisZ
-        }
+      if (gamepad.cameraAxisZ > 0) {
+        const resultVector = rotationQuaternion.vmult(new Vec3(0, 0, -1));
+        position[0] += Math.abs(gamepad.cameraAxisZ) * resultVector.x
+        position[1] += Math.abs(gamepad.cameraAxisZ) * resultVector.y
+        position[2] += Math.abs(gamepad.cameraAxisZ) * resultVector.z
+      } else if (gamepad.cameraAxisZ < 0) {
+        const resultVector = rotationQuaternion.vmult(new Vec3(0, 0, 1));
+        position[0] += Math.abs(gamepad.cameraAxisZ) * resultVector.x
+        position[1] += Math.abs(gamepad.cameraAxisZ) * resultVector.y
+        position[2] += Math.abs(gamepad.cameraAxisZ) * resultVector.z
       }
       this.setState({
         emulatedPose: {
@@ -920,8 +812,6 @@ class Example extends PureComponent {
         }
       })
     }
-    this.forceUpdate()
-    requestAnimationFrame(this.positionLoop)
   }
 
   render () {

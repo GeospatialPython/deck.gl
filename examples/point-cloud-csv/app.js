@@ -23,6 +23,7 @@ import PlotLayer from './plot-layer'
 import Quaternion from './math/Quaternion'
 import Transform from './math/Transform'
 import Vec3 from './math/Vec3'
+import { datasets } from './datasets'
 
 import { scaleLinear, scaleLog } from 'd3-scale'
 
@@ -89,10 +90,10 @@ class Example extends PureComponent {
     this._onHover = this._onHover.bind(this)
     this._onClick = this._onClick.bind(this)
     this.setOrientation = this.setOrientation.bind(this)
-    this.getScaleX = this.getScaleX.bind(this)
-    this.getScaleY = this.getScaleY.bind(this)
-    this.getScaleZ = this.getScaleZ.bind(this)
-    this.getScaleS = this.getScaleS.bind(this)
+    this._loadDataset = this._loadDataset.bind(this)
+    this._getPoints = this._getPoints.bind(this)
+    this._getLimits = this._getLimits.bind(this)
+    this._parseCSV = this._parseCSV.bind(this)
     //  this._initVRDisplay = this._initVRDisplay.bind(this)
 
     this.state = {
@@ -123,22 +124,19 @@ class Example extends PureComponent {
       gamepad: {
         cameraAxisX: 0.0,
         cameraAxisY: 0.0,
-        accelerationZ: 0.0
+        cameraAxisZ: 0.0
       },
       hasPosition: false,
       scale: {x: [-0.5, 0.5], y: [-0.5, 0.5], z: [-0.5, 0.5], s: [1, 10]},
       range: {x: [0, 1], y: [0, 1], z: [0, 1]},
-      vrViewports: this.getDefaultViewport(100, 100)
+      vrViewports: this.getDefaultViewport(100, 100),
+      menuVisible: false,
+      datasets,
+      activeDataset: datasets[0],
+      scales: {}
     }
     window.instance = this
     window.math = {Quaternion, Transform, Vec3}
-    console.log('normalize', normalize(100, 1, 1000, -10, 10))
-    console.log('scaleLinear', this.dnormalize(100))
-  }
-
-  dnormalize (value) {
-    return (
-      scaleLinear().domain([1, 1000]).range([-10, 10]))(value)
   }
 
   setOrientation (a) {
@@ -159,79 +157,132 @@ class Example extends PureComponent {
   }
 
   componentDidMount () {
-    const {getScaleX, getScaleY, getScaleZ, getScaleS} = this
-    const {points, range} = this.state
-
-    const url = './datasets/4.csv'
-
-    Papa.parse(url, {
-      download: true,
-      complete: csv => {
-        const data = csv.data
-        const headers = data[0]
-        const x = 0
-        const y = 1
-        const z = 2
-        const s = 3
-        const r = 4
-        const g = 5
-        const b = 6
-        const type = headers.length - 1
-
-        let xMin = Infinity, xMax = -Infinity
-        let yMin = Infinity, yMax = -Infinity
-        let zMin = Infinity, zMax = -Infinity
-        let bMin = Infinity, bMax = -Infinity
-        let sMin = Infinity, sMax = -Infinity
-
-        for (let i = 1; i < data.length; i++) {
-          const point = data[i]
-          xMin = Math.min(xMin, point[x])
-          yMin = Math.min(yMin, point[y])
-          zMin = Math.min(zMin, point[z])
-
-          bMin = Math.min(bMin, point[b])
-          sMin = Math.min(sMin, point[s])
-
-          xMax = Math.max(xMax, point[x])
-          yMax = Math.max(yMax, point[y])
-          zMax = Math.max(zMax, point[z])
-
-          bMax = Math.max(bMax, point[b])
-          sMax = Math.max(sMax, point[s])
-        }
-
-        range.x = [xMin, xMax]
-        range.y = [yMin, yMax]
-        range.z = [zMin, zMax]
-        range.s = [sMin, sMax]
-
-        const colorMultiplier = bMax > 2 ? 1.0 : 255
-
-        for (let i = 1; i < data.length; i++) {
-          const point = data[i]
-          const color = [
-            point[r] * colorMultiplier,
-            point[g] * colorMultiplier,
-            point[b] * colorMultiplier]
-          //.concat([(normalize(point[s], sMin, sMax, 1.0, 10.0))]);
-            .concat(getScaleS({min: sMin, max: sMax})(point[s]))
-
-          const position = [
-            getScaleX({min: xMin, max: xMax})(point[x]),
-            getScaleY({min: yMin, max: yMax})(point[y]),
-            getScaleZ({min: zMin, max: zMax})(point[z])
-          ]
-
-          points.push({color, position, size: point[s]})
-        }
-
-        this.setState({points, progress: 1})
-      }
-    })
-
+    this._loadDataset()
     this._initVRDisplay()
     window.requestAnimationFrame(this._onUpdate)
+  }
+
+  _loadDataset (dataset = this.state.activeDataset) {
+    const {_getPoints: getPoints} = this
+    if (!dataset) {
+      console.error('Dataset is null.')
+      return
+    }
+    getPoints(dataset, (points) => {
+      this.setState({points, progress: 1, activeDataset: dataset})
+    })
+  }
+
+  _getPoints (dataset, callback) {
+    const {_parseCSV: parseCSV} = this
+    const {file, filetype} = dataset
+    switch (filetype) {
+      case 'CSV':
+      case 'csv':
+        Papa.parse(file, {
+          download: true,
+          complete: csv => callback(parseCSV(csv, dataset))
+        })
+        break
+      case 'LAZ':
+      case 'laz':
+        break
+      default:
+        break
+    }
+  }
+
+  _parseCSV (csv, dataset) {
+    const {data} = csv
+    const {meta} = dataset
+    const {mapping, range} = meta
+    const {x, y, z, s, r, g, b, t, i} = mapping
+    const {_getScale: getScale, _getLimits: getLimits} = this
+    const {xLimit, yLimit, zLimit, sLimit, bLimit} = getLimits(data, mapping)
+    const colorMultiplier = bLimit.max > 2 ? 1.0 : 255
+    const scaleRange = range.s || [sLimit.min, sLimit.max]
+    const points = []
+    const max = Math.max(...Object.values(mapping)) + 1
+
+    for (let idx = 1; idx < data.length; idx++) {
+      const d = data[idx]
+      const point = {}
+
+      point.position = [
+        getScale(xLimit)(d[x]),
+        getScale(yLimit)(d[y]),
+        getScale(zLimit)(d[z])
+      ]
+
+      if (Math.max(r, g, b) < max) {
+        point.color = [
+          d[r] * colorMultiplier,
+          d[g] * colorMultiplier,
+          d[b] * colorMultiplier]
+      } else {
+        point.color = [40, z * 128 + 128, 160]
+      }
+
+      if (s < max) {
+        point.size = getScale(sLimit, scaleRange)(d[s])
+        point.color = point.color.concat(getScale(sLimit, scaleRange)(d[s]))
+      } else {
+        point.size = 0.02
+        point.color = point.color.concat(0.02)
+      }
+
+      if (i < max) {
+        point.info = d[i]
+      }
+
+      if (t < max) {
+        point.time = d[i]
+      }
+
+      points.push(point)
+    }
+    return points
+  }
+
+  _getLimits (data, mapping, startIndex = 1) {
+    const {x, y, z, s, b} = mapping
+
+    let xMin = Infinity
+    let xMax = -Infinity
+    let yMin = Infinity
+    let yMax = -Infinity
+    let zMin = Infinity
+    let zMax = -Infinity
+    let bMin = Infinity
+    let bMax = -Infinity
+    let sMin = Infinity
+    let sMax = -Infinity
+
+    console.log('getLimits', x, y, z, data)
+
+    for (let i = startIndex; i < data.length; i++) {
+      const point = data[i]
+
+      xMin = Math.min(xMin, point[x])
+      yMin = Math.min(yMin, point[y])
+      zMin = Math.min(zMin, point[z])
+      bMin = Math.min(bMin, point[b])
+      sMin = Math.min(sMin, point[s])
+
+      xMax = Math.max(xMax, point[x])
+      yMax = Math.max(yMax, point[y])
+      zMax = Math.max(zMax, point[z])
+      bMax = Math.max(bMax, point[b])
+      sMax = Math.max(sMax, point[s])
+    }
+
+    return {
+      xLimit: {min: xMin, max: xMax},
+      yLimit: {min: yMin, max: yMax},
+      zLimit: {min: zMin, max: zMax},
+      bLimit: {min: bMin, max: bMax},
+      sLimit: {min: sMin, max: sMax}
+    }
   }
 
   connectHandler (gamepadIndex) {
@@ -253,27 +304,42 @@ class Example extends PureComponent {
   }
 
   buttonChangeHandler (buttonName, down) {
-    const {gamepad, emulatedPose} = this.state
-    const factor = 0.005
+    const {emulatedPose, menu} = this.state
     console.log(buttonName, down)
     switch (buttonName) {
       case 'Y':
         if (down) {
-          gamepad.cameraAxisZ += factor * -1
-        } else {
-          gamepad.cameraAxisZ = 0
+          this.setState({menuVisible: !this.state.menuVisible})
         }
         break
       case 'A':
-        if (down) {
-          gamepad.cameraAxisZ += factor
-        } else {
-          gamepad.cameraAxisZ = 0
+        if(down) {
+          menu.navigate().press()
         }
         break
       case 'RS':
         if (down) {
           emulatedPose.position = [0, 0, 0]
+        }
+        break
+      case 'DPadUp':
+        if (down) {
+          menu.navigate().up()
+        }
+        break
+      case 'DPadDown':
+        if (down) {
+          menu.navigate().down()
+        }
+        break
+      case 'DPadLeft':
+        if (down) {
+          menu.navigate().left()
+        }
+        break
+      case 'DPadRight':
+        if (down) {
+          menu.navigate().right()
         }
         break
     }
@@ -300,9 +366,9 @@ class Example extends PureComponent {
         break
       case 'RightStickY':
         if (value !== 0) {
-          gamepad.rightAxisZ += inc * value
+          gamepad.cameraAxisZ += inc * value
         } else {
-          gamepad.rightAxisZ = 0
+          gamepad.cameraAxisZ = 0
         }
         break
     }
@@ -315,24 +381,11 @@ class Example extends PureComponent {
     window.removeEventListener('resize', this._onResize)
   }
 
-  getScaleX ({min, max}) {
-    const {scale} = this.state
-    return scaleLinear().domain([min, max]).range(scale.x)
-  }
-
-  getScaleY ({min, max}) {
-    const {scale} = this.state
-    return scaleLinear().domain([min, max]).range(scale.y)
-  }
-
-  getScaleZ ({min, max}) {
-    const {scale} = this.state
-    return scaleLog().domain([min, max]).range(scale.z)
-  }
-
-  getScaleS ({min, max}) {
-    const {scale} = this.state
-    return scaleLinear().domain([min, max]).range(scale.s)
+  _getScale ({min, max}, range = [-0.5, 0.5], type = 'linear') {
+    if (type === 'log') {
+      return scaleLog().domain([min, max]).range(range)
+    }
+    return scaleLinear().domain([min, max]).range(range)
   }
 
   _onResize () {
@@ -383,13 +436,9 @@ class Example extends PureComponent {
     })
   }
 
-  setNormal (d) {
-    return d.map(Math.sqrt)
-  }
-
   _initVRDisplay () {
     /* eslint-disable no-unused-vars */
-    if(typeof WebVRPolyfill !== 'undefined') {
+    if (typeof WebVRPolyfill !== 'undefined') {
       const polyfill = new WebVRPolyfill({
         PROVIDE_MOBILE_VRDISPLAY: true,
         DPDB_URL: './vr/dpdb.json'
@@ -478,14 +527,14 @@ class Example extends PureComponent {
   }
 
   plotLayer () {
-    const {getScaleX, getScaleY, getScaleZ} = this
+    const {_getScale: getScale} = this
     const {points} = this.state
 
     return new PlotLayer({
       getColor: (x, y, z) => [40, z * 128 + 128, 160, 128],
-      getXScale: getScaleX,
-      getYScale: getScaleZ,
-      getZScale: getScaleY,
+      getXScale: getScale,
+      getYScale: getScale,
+      getZScale: getScale,
       points,
       // vCount: resolution,
       drawAxes: true,
@@ -664,7 +713,7 @@ class Example extends PureComponent {
         position[2] += Math.abs(gamepad.cameraAxisY) * resultVector.z
       }
       if (gamepad.cameraAxisZ) {
-        const direction = gamepad.cameraAxisZ < 0 ? -1 : 1
+        const direction = gamepad.cameraAxisZ < 0 ? 1 : -1
         const resultVector = orientationQ.vmult(Vec3.UNIT_Z.scale(direction))
         position[0] += Math.abs(gamepad.cameraAxisZ) * resultVector.x
         position[1] += Math.abs(gamepad.cameraAxisZ) * resultVector.y
@@ -684,19 +733,25 @@ class Example extends PureComponent {
   }
 
   render () {
-    const {width, height} = this.state
+    const {width, height, menuVisible} = this.state
     if (width <= 0 || height <= 0) {
       return null
     }
 
     return (
-      <div>
+      <div
+        className={!menuVisible ? 'menu-layer--visible' : 'menu-layer--hidden'}>
         {this._renderDeckGLCanvas()}
         {this._renderProgressInfo()}
         <MenuLayer
+          datasets={datasets}
           width={width}
           height={height}
           currentView='dataset-selection'
+          menuRef={menu => (this.setState({menu}))}
+          menuVisible
+          switchDataset={dataset => this._loadDataset(dataset)}
+          toggleMenu={() => this.setState({menuVisible: !this.state.menuVisible})}
         />
       </div>
     )
@@ -704,6 +759,7 @@ class Example extends PureComponent {
 }
 
 const root = document.createElement('div')
+root.id = 'root'
 document.body.appendChild(root)
 
 render(<Example/>, root)

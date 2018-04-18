@@ -59,7 +59,7 @@ export const datasets = [
     focused: false,
     meta: {
       mapping: { x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6 },
-      labels: DEFAULT_LABELS,
+      labels:  { 0: 'GDP', 1: 'Life Expectancy', 2: 'Population', 3: 'Size', 4: 'Red', 5: 'Blue', 6: 'Green'},
       units: {
         x: {type: 'append', value: 'mm'},
         y: {type: 'append', value: 'mm'},

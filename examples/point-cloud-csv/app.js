@@ -163,12 +163,15 @@ class Example extends PureComponent {
     window.requestAnimationFrame(this._onUpdate)
   }
 
-  _loadDataset (dataset = this.state.activeDataset) {
+  _loadDataset (dataset = this.state.activeDataset, nextMapping = null) {
     const {_getPoints: getPoints} = this
     if (!dataset) {
       console.error('Dataset is null.')
       return
     }
+
+    this.setState({nextMapping})
+
     getPoints(dataset, (points) => {
       this.setState({points, progress: 1, activeDataset: dataset})
     })
@@ -196,7 +199,12 @@ class Example extends PureComponent {
   _parseCSV (csv, dataset) {
     const {data} = csv
     const {meta} = dataset
-    const {mapping, range} = meta
+    const {nextMapping} = this.state
+    const mapping = nextMapping || meta.mapping
+    console.log('meta.map', meta.mapping)
+    console.log('nextMapping', nextMapping)
+    console.log('mapping', mapping)
+    const {range} = meta
     const {x, y, z, s, r, g, b, t, i} = mapping
     const {_getScale: getScale, _getLimits: getLimits} = this
     const {xLimit, yLimit, zLimit, sLimit, bLimit} = getLimits(data, mapping)
@@ -773,7 +781,7 @@ class Example extends PureComponent {
           currentView='dataset-selection'
           menuRef={menu => (this.setState({menu}))}
           menuVisible
-          switchDataset={dataset => this._loadDataset(dataset)}
+          switchDataset={(dataset, nextMapping) => this._loadDataset(dataset, nextMapping)}
           toggleMenu={this.toggleMenu}
           activeDataset={activeDataset}
         />

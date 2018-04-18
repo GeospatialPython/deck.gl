@@ -27,12 +27,31 @@ export default class MenuLayer extends React.Component {
       lastAction: null,
       nextMapping: null,
       mappingAttributes: null,
-      images: IMAGES
+      images: IMAGES,
+      maps: [
+        {
+          name: 'X-axis',
+          key: 'x'
+        },
+        {
+          name: 'Y-axis',
+          key: 'y'
+        },
+        {
+          name: 'Z-axis',
+          key: 'z'
+        },
+        {
+          name: 'Size',
+          key: 's'
+        }],
+      lastDataset: null
     }
     this._getDatasetSelection = this._getDatasetSelection.bind(this)
     this._getAttributeAssignment = this._getAttributeAssignment.bind(this)
     this._getControllerInstructions = this._getControllerInstructions.bind(this)
     this._buildMappingAttributes = this._buildMappingAttributes.bind(this)
+    this._getNextMapping = this._getNextMapping.bind(this)
     this._changeView = this._changeView.bind(this)
     this._updateView = this._updateView.bind(this)
     this._findFocus = this._findFocus.bind(this)
@@ -177,24 +196,7 @@ export default class MenuLayer extends React.Component {
   _getAttributeAssignment () {
     const {activeDataset} = this.props
     const {labels, mapping} = activeDataset.meta
-    const {focus, lastFocus, lastAction} = this.state
-    const maps = [
-      {
-        name: 'X-axis',
-        key: 'x'
-      },
-      {
-        name: 'Y-axis',
-        key: 'y'
-      },
-      {
-        name: 'Z-axis',
-        key: 'z'
-      },
-      {
-        name: 'Size',
-        key: 's'
-      }]
+    const {focus, lastFocus, lastAction, maps} = this.state
 
     let {nextMapping} = this.state
     if (!nextMapping) {
@@ -294,6 +296,8 @@ export default class MenuLayer extends React.Component {
 
     this.setState({traversables: this.transpose(mappingAttributes)})
 
+    this._getNextMapping();
+
     const attributeAssignment = createElement('div',
       {className: 'attribute-assignment'}, ...attributeSets)
     const viewContainer = createElement('div', {className: 'view-container'},
@@ -311,10 +315,12 @@ export default class MenuLayer extends React.Component {
         const attribute = {
           id: key,
           key: `${maps[i].key}-${i}-${key}`,
+          mapKey: maps[i].key,
           x: i,
           y: key,
           label: labels[key],
-          visible: mapping[maps[i].key] === Number(key)
+          visible: mapping[maps[i].key] === Number(key),
+          action: 'change-mapping'
         }
         attributes.push(attribute)
       })
@@ -322,6 +328,19 @@ export default class MenuLayer extends React.Component {
     }
     this.setState({mappingAttributes})
     return this.state.mappingAttributes
+  }
+
+  _getNextMapping() {
+    const { mappingAttributes, nextMapping} = this.state;
+    const nmap = Object.assign({}, nextMapping)
+    mappingAttributes.forEach((attributes) => {
+      const attrib = attributes.filter(a => a.visible)[0]
+      if (attrib) {
+        nmap[attrib.mapKey] = Number(attrib.id)
+      }
+    })
+    console.log('next-mapping', nmap)
+    return nmap
   }
 
   _updateFocus (x, y) {
@@ -376,10 +395,23 @@ export default class MenuLayer extends React.Component {
   }
 
   _handleAction (object) {
-    const {switchDataset, toggleMenu} = this.props
+    const {switchDataset, toggleMenu, activeDataset} = this.props
+    const {lastDataset} = this.props
     switch (object.action) {
       case 'switch-dataset':
         switchDataset(object)
+        if (lastDataset !== null && lastDataset !== activeDataset) {
+          this.setState({mappingAttributes: null})
+        }
+        this.setState({lastDataset: activeDataset})
+        toggleMenu()
+        break
+      case 'change-mapping':
+        switchDataset(activeDataset, this._getNextMapping())
+        if (lastDataset !== null && lastDataset !== activeDataset) {
+          this.setState({mappingAttributes: null})
+        }
+        this.setState({lastDataset: activeDataset})
         toggleMenu()
         break
       default:

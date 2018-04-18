@@ -17,7 +17,7 @@ import { setParameters } from 'luma.gl'
 import EmulatedVRDisplay from './vr/emulated-vr-display'
 
 import Papa from 'papaparse'
-import { Gamepad } from './gamepad/react-gamepad'
+import { Gamepad } from './gamepad/react-gamepad/lib/'
 
 import PlotLayer from './plot-layer'
 import Quaternion from './math/Quaternion'

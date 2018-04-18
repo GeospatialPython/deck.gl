@@ -167,7 +167,7 @@ export default class MenuLayer extends React.Component {
     }
 
     let {mappingAttributes} = this.state
-    if (!mappingAttributes) {
+    if (!mappingAttributes ) {
       mappingAttributes = this._buildMappingAttributes(nextMapping, maps, labels)
     }
 

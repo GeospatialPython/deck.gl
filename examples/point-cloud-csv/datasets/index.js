@@ -29,7 +29,7 @@ export const datasets = [
     filetype: 'csv',
     focused: false,
     meta: {
-      mapping: { x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6 },
+      mapping: {x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6},
       labels: DEFAULT_LABELS,
       units: {
         x: {type: 'append', value: 'mm'},
@@ -58,8 +58,16 @@ export const datasets = [
     filetype: 'csv',
     focused: false,
     meta: {
-      mapping: { x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6 },
-      labels:  { 0: 'GDP', 1: 'Life Expectancy', 2: 'Population', 3: 'Size', 4: 'Red', 5: 'Blue', 6: 'Green'},
+      mapping: {x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6},
+      labels: {
+        0: 'GDP',
+        1: 'Life Expectancy',
+        2: 'Population',
+        3: 'Size',
+        4: 'Red',
+        5: 'Blue',
+        6: 'Green'
+      },
       units: {
         x: {type: 'append', value: 'mm'},
         y: {type: 'append', value: 'mm'},
@@ -79,6 +87,38 @@ export const datasets = [
       range: {
         ...DEFAULT_RANGES,
         s: [1, 20]
+      }
+    }
+  },
+  {
+    id: 2,
+    name: 'Bird flocking',
+    description: 'Simulation of boids',
+    file: './datasets/boids_1000.csv',
+    filetype: 'csv',
+    focused: false,
+    meta: {
+      mapping: {i: 0, x: 1, y: 2, z: 3, s: 4, t: 5, r: 6, g: 7, b: 8},
+      labels: DEFAULT_LABELS,
+      units: {
+        x: {type: 'append', value: 'mm'},
+        y: {type: 'append', value: 'mm'},
+        z: {
+          type: 'substitute', value: [
+            [0.0, 'Low'],
+            [0.3, 'Medium'],
+            [0.7, 'High']
+          ]
+        }
+      },
+      scale: {
+        x: DEFAULT_SCALE,
+        y: DEFAULT_SCALE,
+        z: DEFAULT_SCALE
+      },
+      range: {
+        ...DEFAULT_RANGES,
+        s: [1, 1.67]
       }
     }
   }

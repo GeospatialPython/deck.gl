@@ -134,7 +134,15 @@ class Example extends PureComponent {
       menuVisible: false,
       datasets,
       activeDataset: datasets[0],
-      scales: {}
+      scales: {},
+      time: {
+        values: [],
+        currentValue: null,
+        currentIndex: 0,
+        speed: 1,
+        maxSpeed: 5
+      },
+      filters: []
     }
     window.instance = this
     window.math = {Quaternion, Transform, Vec3}
@@ -211,6 +219,7 @@ class Example extends PureComponent {
     const colorMultiplier = bLimit.max > 2 ? 1.0 : 255
     const scaleRange = range.s || [sLimit.min, sLimit.max]
     const points = []
+    const filters = []
     const max = Math.max(...Object.values(mapping)) + 1
 
     for (let idx = 1; idx < data.length; idx++) {
@@ -245,13 +254,52 @@ class Example extends PureComponent {
       }
 
       if (t < max) {
-        point.time = d[i]
+        point.time = Number(d[t])
       }
 
       points.push(point)
     }
-    this.setState({activeMapping: mapping})
+
+    let timeValues = []
+
+    if (t < max) {
+      filters.push({
+        key: 'time',
+        mappingIndex: t
+      })
+
+      const uniqueFilter = (value, index, self) => (self.indexOf(value) ===
+        index)
+
+      for (let idx = 1; idx < data.length; idx++) {
+        timeValues.push(data[idx][t])
+      }
+
+      timeValues = timeValues.filter(uniqueFilter).map(Number)
+    }
+
+    this.setState({
+      activeMapping: mapping,
+      filters,
+      time: {values: timeValues, currentIndex: 0}
+    })
     return points
+  }
+
+  _applyFilters (points) {
+    const {filters, time} = this.state
+    if (filters && filters.length === 0) {
+      return points;
+    }
+    let filteredPoints = []
+    filters.forEach(filter => {
+      if (filter.key === 'time') {
+        const currentValue = time.values[time.currentIndex]
+        filteredPoints = points.filter(
+          point => (point[filter.key] === currentValue))
+      }
+    })
+    return filteredPoints
   }
 
   _getLimits (data, mapping, startIndex = 1) {
@@ -311,12 +359,12 @@ class Example extends PureComponent {
     })
   }
 
-  toggleMenu() {
+  toggleMenu () {
     this.setState({menuVisible: !this.state.menuVisible})
   }
 
   buttonChangeHandler (buttonName, down) {
-    const {emulatedPose, menu, menuVisible} = this.state
+    const {emulatedPose, menu, menuVisible, time} = this.state
     console.log(buttonName, down)
     switch (buttonName) {
       case 'Y':
@@ -326,7 +374,7 @@ class Example extends PureComponent {
         }
         break
       case 'A':
-        if(down && menuVisible) {
+        if (down && menuVisible) {
           menu.navigate().press()
         }
         break
@@ -377,7 +425,7 @@ class Example extends PureComponent {
   }
 
   axisChangeHandler (axisName, value, previousValue) {
-    const {gamepad} = this.state
+    const {gamepad, time} = this.state
     const inc = 0.01
     console.log(axisName, value)
     switch (axisName) {
@@ -400,6 +448,46 @@ class Example extends PureComponent {
           gamepad.cameraAxisZ += inc * value
         } else {
           gamepad.cameraAxisZ = 0
+        }
+        break
+      case 'RightTrigger':
+        if (value !== 0) {
+          if (time.currentIndex + time.speed < time.values.length) {
+            this.setState({
+              time: {
+                ...time,
+                currentIndex: time.currentIndex + time.speed,
+                speed: time.speed
+              }
+            })
+          }
+        } else {
+          this.setState({
+            time: {
+              ...time,
+              speed: 1
+            }
+          })
+        }
+        break
+      case 'LeftTrigger':
+        if (value !== 0) {
+          if (time.currentIndex - time.speed >= 0) {
+            this.setState({
+              time: {
+                ...time,
+                currentIndex: time.currentIndex - time.speed,
+                speed: time.speed
+              }
+            })
+          } else {
+            this.setState({
+              time: {
+                ...time,
+                speed: 1
+              }
+            })
+          }
         }
         break
     }
@@ -456,7 +544,7 @@ class Example extends PureComponent {
 
     return new PointCloudLayer({
       id: 'laz-point-cloud-layer',
-      data: points,
+      data: this._applyFilters(points),
       coordinateSystem: COORDINATE_SYSTEM.IDENTITY,
       getPosition: d => d.position,
       // getSize: d => d.size,
@@ -781,7 +869,8 @@ class Example extends PureComponent {
           currentView='dataset-selection'
           menuRef={menu => (this.setState({menu}))}
           menuVisible
-          switchDataset={(dataset, nextMapping) => this._loadDataset(dataset, nextMapping)}
+          switchDataset={(dataset, nextMapping) => this._loadDataset(dataset,
+            nextMapping)}
           toggleMenu={this.toggleMenu}
           activeDataset={activeDataset}
         />

@@ -167,7 +167,7 @@ export default class MenuLayer extends React.Component {
     this.setState({traversables, images});
 
     const controllerImages = createElement('div', {className: 'controller-images'}, ...list)
-    const viewContainer = createElement('div', {className: 'view-container'},
+    const viewContainer = createElement('div', {className: 'view-container view-container-controller-instructions'},
       controllerImages)
     const htmlElement = createElement('div', {className: 'view-element'},
       viewContainer)

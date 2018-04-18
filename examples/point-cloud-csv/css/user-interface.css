@@ -30,7 +30,7 @@
 }
 
 .menu-layer--visible canvas {
-    filter: blur(10px);
+    filter: blur(20px) brightness(80%);
     transition: filter var(--fade-transition);
 }
 
@@ -94,7 +94,9 @@
 }
 
 #menu-layer .menu-focus {
-    background-color: rgba(255, 240, 157, 0.6);
+    box-sizing: border-box;
+    -background: rgba(255, 240, 157, 0.6);
+    background: linear-gradient(135deg, rgba(255, 254, 120, 0.6) 10%, rgba(255, 226, 52, 0.6) 100%);
 }
 
 .dataset-list .dataset-list-item {
@@ -141,8 +143,12 @@
     display: block;
 }
 
+.view-container-controller-instructions {
+    background-color: rgba(0, 0, 0, 0);
+}
+
 .controller-images img {
-    width: 300px;
+    width: 360px;
     height: auto;
     display: none;
 }

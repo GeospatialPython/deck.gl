@@ -322,6 +322,14 @@ class Example extends PureComponent {
           menu.navigate().press()
         }
         break
+      case 'X':
+        if (down) {
+          if (!menuVisible) {
+            menu._changeView('controller-instructions')
+          }
+          this.toggleMenu()
+        }
+        break
       case 'RS':
         if (down) {
           emulatedPose.position = [0, 0, 0]

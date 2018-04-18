@@ -30,7 +30,7 @@ export const datasets = [
     focused: false,
     meta: {
       mapping: { x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6 },
-      label: DEFAULT_LABELS,
+      labels: DEFAULT_LABELS,
       units: {
         x: {type: 'append', value: 'mm'},
         y: {type: 'append', value: 'mm'},
@@ -59,7 +59,7 @@ export const datasets = [
     focused: false,
     meta: {
       mapping: { x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6 },
-      label: DEFAULT_LABELS,
+      labels: DEFAULT_LABELS,
       units: {
         x: {type: 'append', value: 'mm'},
         y: {type: 'append', value: 'mm'},
@@ -81,13 +81,5 @@ export const datasets = [
         s: [1, 20]
       }
     }
-  },
-  {
-    id: 2,
-    name: 'Indoor structure',
-    description: 'Point cloud map of 3D indoor structure',
-    file: './datasets/indoor.laz',
-    filetype: 'laz',
-    focused: false
   }
 ]

@@ -94,6 +94,7 @@ class Example extends PureComponent {
     this._getPoints = this._getPoints.bind(this)
     this._getLimits = this._getLimits.bind(this)
     this._parseCSV = this._parseCSV.bind(this)
+    this.toggleMenu = this.toggleMenu.bind(this)
     //  this._initVRDisplay = this._initVRDisplay.bind(this)
 
     this.state = {
@@ -241,6 +242,7 @@ class Example extends PureComponent {
 
       points.push(point)
     }
+    this.setState({activeMapping: mapping})
     return points
   }
 
@@ -257,8 +259,6 @@ class Example extends PureComponent {
     let bMax = -Infinity
     let sMin = Infinity
     let sMax = -Infinity
-
-    console.log('getLimits', x, y, z, data)
 
     for (let i = startIndex; i < data.length; i++) {
       const point = data[i]
@@ -303,17 +303,22 @@ class Example extends PureComponent {
     })
   }
 
+  toggleMenu() {
+    this.setState({menuVisible: !this.state.menuVisible})
+  }
+
   buttonChangeHandler (buttonName, down) {
-    const {emulatedPose, menu} = this.state
+    const {emulatedPose, menu, menuVisible} = this.state
     console.log(buttonName, down)
     switch (buttonName) {
       case 'Y':
         if (down) {
-          this.setState({menuVisible: !this.state.menuVisible})
+          this.toggleMenu()
+          console.log('menuVisible', this.state.menuVisible)
         }
         break
       case 'A':
-        if(down) {
+        if(down && menuVisible) {
           menu.navigate().press()
         }
         break
@@ -323,23 +328,33 @@ class Example extends PureComponent {
         }
         break
       case 'DPadUp':
-        if (down) {
+        if (down && menuVisible) {
           menu.navigate().up()
         }
         break
       case 'DPadDown':
-        if (down) {
+        if (down && menuVisible) {
           menu.navigate().down()
         }
         break
       case 'DPadLeft':
-        if (down) {
+        if (down && menuVisible) {
           menu.navigate().left()
         }
         break
       case 'DPadRight':
-        if (down) {
+        if (down && menuVisible) {
           menu.navigate().right()
+        }
+        break
+      case 'RB':
+        if (down && menuVisible) {
+          menu.navigate().next()
+        }
+        break
+      case 'LB':
+        if (down && menuVisible) {
+          menu.navigate().prev()
         }
         break
     }
@@ -733,14 +748,14 @@ class Example extends PureComponent {
   }
 
   render () {
-    const {width, height, menuVisible} = this.state
+    const {width, height, menuVisible, activeDataset} = this.state
     if (width <= 0 || height <= 0) {
       return null
     }
 
     return (
       <div
-        className={!menuVisible ? 'menu-layer--visible' : 'menu-layer--hidden'}>
+        className={menuVisible ? 'menu-layer--visible' : 'menu-layer--hidden'}>
         {this._renderDeckGLCanvas()}
         {this._renderProgressInfo()}
         <MenuLayer
@@ -751,7 +766,8 @@ class Example extends PureComponent {
           menuRef={menu => (this.setState({menu}))}
           menuVisible
           switchDataset={dataset => this._loadDataset(dataset)}
-          toggleMenu={() => this.setState({menuVisible: !this.state.menuVisible})}
+          toggleMenu={this.toggleMenu}
+          activeDataset={activeDataset}
         />
       </div>
     )

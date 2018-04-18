@@ -9,6 +9,17 @@
     color: #fff;
 }
 
+.separator {
+    display: block;
+    position: fixed;
+    width: 2px;
+    height: 100%;
+    left: 50%;
+    transform: translateX(50%);
+    background-color: rgba(100, 100, 100, 0.5);
+    background-blend-mode: overlay;
+}
+
 .menu-layer--hidden #menu-layer {
     display: none;
 }
@@ -127,5 +138,15 @@
 }
 
 .attribute-set .attribute-label--visible {
+    display: block;
+}
+
+.controller-images img {
+    width: 300px;
+    height: auto;
+    display: none;
+}
+
+.controller-images .controller-image--visible {
     display: block;
 }

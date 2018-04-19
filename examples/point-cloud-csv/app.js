@@ -28,6 +28,8 @@ import { datasets } from './datasets'
 
 import { scaleLinear, scaleLog } from 'd3-scale'
 
+import {loadLazFile, parseLazData} from './datasets/laslaz-loader';
+
 const DATA_REPO = 'https://raw.githubusercontent.com/uber-common/deck.gl-data/master'
 const FILE_PATH = 'examples/point-cloud-laz/indoor.laz'
 
@@ -295,10 +297,55 @@ class Example extends PureComponent {
         break
       case 'LAZ':
       case 'laz':
+        loadLazFile(dataset.file).then(laz => {
+          callback(this._parseLAZ(laz, dataset))
+        })
         break
       default:
         break
     }
+  }
+
+  normalize(points) {
+    let xMin = Infinity;
+    let yMin = Infinity;
+    let zMin = Infinity;
+    let xMax = -Infinity;
+    let yMax = -Infinity;
+    let zMax = -Infinity;
+
+    for (let i = 0; i < points.length; i++) {
+      xMin = Math.min(xMin, points[i].position[0]);
+      yMin = Math.min(yMin, points[i].position[1]);
+      zMin = Math.min(zMin, points[i].position[2]);
+      xMax = Math.max(xMax, points[i].position[0]);
+      yMax = Math.max(yMax, points[i].position[1]);
+      zMax = Math.max(zMax, points[i].position[2]);
+    }
+
+    const scale = Math.max(...[xMax - xMin, yMax - yMin, zMax - zMin]);
+    const xMid = (xMin + xMax) / 2;
+    const yMid = (yMin + yMax) / 2;
+    const zMid = (zMin + zMax) / 2;
+
+    for (let i = 0; i < points.length; i++) {
+      points[i].position[0] = (points[i].position[0] - xMid) / scale;
+      points[i].position[1] = (points[i].position[1] - yMid) / scale;
+      points[i].position[2] = (points[i].position[2] - zMid) / scale;
+    }
+  }
+
+  _parseLAZ (laz, dataset) {
+    const skip = 100;
+    const points = [];
+    parseLazData(laz, skip, (decoder, progress) => {
+      for (let i = 0; i < decoder.pointsCount; i++) {
+        const {color, position} = decoder.getPoint(i);
+        points.push({color, position, size: 1});
+      }
+      this.normalize(points);
+    });
+    return points;
   }
 
   _parseCSV (csv, dataset) {
@@ -739,8 +786,8 @@ class Example extends PureComponent {
     const gazePoint = {x: width / 4, y: height / 2}
     const {deckGL} = this
     setInterval(() => {
-      const {gaze} = this.state
-      if (gaze.active && deckGL) {
+      const {activeDataset, gaze} = this.state
+      if (activeDataset.filetype !== 'laz' && gaze.active && deckGL) {
         this.setState({
           gaze: {
             active: true,
@@ -773,23 +820,34 @@ class Example extends PureComponent {
   }
 
   _renderCsvPointCloudLayer () {
-    const {points, time} = this.state
+    const {points, time, activeDataset} = this.state
 
     if (!points || points.length === 0) {
       return null
     }
 
+    if(activeDataset.filetype === 'csv') {
+      return new PointCloudLayer({
+        id: 'laz-point-cloud-layer',
+        data: time.enabled ? time.timeline[time.currentIndex] : points,
+        coordinateSystem: COORDINATE_SYSTEM.IDENTITY,
+        getPosition: d => d.position,
+        // getSize: d => d.size,
+        getNormal: d => d.position.map(Math.abs).map(Math.sqrt),
+        // getColor: d => [255, 255, 255, 128],
+        radiusPixels: 10,
+        pickable: true
+      })
+    }
     return new PointCloudLayer({
       id: 'laz-point-cloud-layer',
-      data: time.enabled ? time.timeline[time.currentIndex] : points,
+      data: points,
       coordinateSystem: COORDINATE_SYSTEM.IDENTITY,
       getPosition: d => d.position,
-      // getSize: d => d.size,
-      getNormal: d => d.position.map(Math.abs).map(Math.sqrt),
-      // getColor: d => [255, 255, 255, 128],
-      radiusPixels: 10,
-      pickable: true
-    })
+      getNormal: d => [0, 0.5, 0.2],
+      getColor: d => [255, 255, 255, 5],
+      radiusPixels: 0.1
+    });
   }
 
   _initVRDisplay () {
@@ -930,15 +988,16 @@ class Example extends PureComponent {
   }
 
   _renderDeckGLCanvas () {
-    const {width, height, viewport, vrEnabled, hoverInfo} = this.state
-
+    const {width, height, viewport, vrEnabled, hoverInfo, activeDataset} = this.state
+    const isLazData = activeDataset.filetype === 'laz'
+    const layers = isLazData ? [this._renderCsvPointCloudLayer()] : [this.plotLayer(), this._renderCsvPointCloudLayer()]
     if (vrEnabled) {
       return (
         <DeckGL
           width={width}
           height={height}
           viewports={this._renderViewports()}
-          layers={[this.plotLayer(), this._renderCsvPointCloudLayer()]}
+          layers={layers}
           onWebGLInitialized={this._onInitialized}
           onLayerClick={this._onClick}
           ref={deck => { this.deckGL = deck }}
@@ -961,7 +1020,7 @@ class Example extends PureComponent {
           width={width}
           height={height}
           viewport={glViewport}
-          layers={[this.plotLayer(), this._renderCsvPointCloudLayer()]}
+          layers={layers}
           onWebGLInitialized={this._onInitialized}
           onLayerClick={this._onClick}
         />

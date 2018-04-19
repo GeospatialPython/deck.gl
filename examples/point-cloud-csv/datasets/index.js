@@ -123,5 +123,28 @@ export const datasets = [
         s: [1, 1.67]
       }
     }
+  },
+  {
+    id: 3,
+    name: 'Indoor 3D Point Cloud',
+    description: 'Simulation of boids',
+    file: './datasets/indoor.laz',
+    filetype: 'laz',
+    focused: false,
+    meta: {
+      mapping: {i: 0, x: 1, y: 2, z: 3, s: 4, t: 5, r: 6, g: 7, b: 8},
+      labels:  {0: 'ID', 1: 'X', 2: 'Y', 3: 'Z', 4: 'Size', 5: 'Time', 6: 'Red', 7: 'Green', 8: 'Blue'},
+      units: {
+        x: {type: 'append', value: ''},
+        y: {type: 'append', value: ''},
+        z: {type: 'append', value: ''}
+      },
+      scale: {
+        x: DEFAULT_SCALE,
+        y: DEFAULT_SCALE,
+        z: DEFAULT_SCALE
+      },
+      range: DEFAULT_RANGES
+    }
   }
 ]

@@ -34,20 +34,17 @@ export const datasets = [
       units: {
         x: {type: 'append', value: 'mm'},
         y: {type: 'append', value: 'mm'},
-        z: {
-          type: 'substitute', value: [
-            [0.0, 'Low'],
-            [0.3, 'Medium'],
-            [0.7, 'High']
-          ]
-        }
+        z: {type: 'append', value: 'mm'}
       },
       scale: {
         x: DEFAULT_SCALE,
-        y: {min: -0.5, max: 1.0, type: 'linear'},
+        y: DEFAULT_SCALE,
         z: DEFAULT_SCALE
       },
-      range: DEFAULT_RANGES
+      range: {
+        ...DEFAULT_RANGES,
+        z: [-0.5, 3]
+      }
     }
   },
   {
@@ -58,16 +55,43 @@ export const datasets = [
     filetype: 'csv',
     focused: false,
     meta: {
-      mapping: {x: 0, y: 1, z: 2, s: 3, r: 4, g: 5, b: 6},
+      mapping: {x: 0, y: 2, z: 1, s: 3, r: 4, g: 5, b: 6},
       labels: {
-        0: 'GDP',
-        1: 'Life Expectancy',
+        0: 'GDP (US$)',
+        1: 'Life Expectancy (years)',
         2: 'Population',
         3: 'Size',
         4: 'Red',
         5: 'Blue',
         6: 'Green'
       },
+      units: {
+        x: {type: 'append', value: ''},
+        y: {type: 'append', value: ''},
+        z: {type: 'append', value: ''}
+      },
+      scale: {
+        x: DEFAULT_SCALE,
+        y: {min: -0.5, max: 1.0, type: 'log'},
+        z: DEFAULT_SCALE
+      },
+      range: {
+        ...DEFAULT_RANGES,
+        s: [1, 20],
+        y: [-0.5, 2.5]
+      }
+    }
+  },
+  {
+    id: 2,
+    name: 'Bird flocking (1000)',
+    description: 'Simulation of boids',
+    file: './datasets/boids_1000.csv',
+    filetype: 'csv',
+    focused: false,
+    meta: {
+      mapping: {i: 0, x: 1, y: 2, z: 3, s: 4, t: 5, r: 6, g: 7, b: 8},
+      labels: DEFAULT_LABELS,
       units: {
         x: {type: 'append', value: 'mm'},
         y: {type: 'append', value: 'mm'},
@@ -81,20 +105,20 @@ export const datasets = [
       },
       scale: {
         x: DEFAULT_SCALE,
-        y: {min: -0.5, max: 1.0, type: 'log'},
+        y: DEFAULT_SCALE,
         z: DEFAULT_SCALE
       },
       range: {
         ...DEFAULT_RANGES,
-        s: [1, 20]
+        s: [1, 1.67]
       }
     }
   },
   {
-    id: 2,
-    name: 'Bird flocking',
+    id: 3,
+    name: 'Bird flocking (50,000)',
     description: 'Simulation of boids',
-    file: './datasets/boids_1000.csv',
+    file: './datasets/boids_1048576.csv',
     filetype: 'csv',
     focused: false,
     meta: {

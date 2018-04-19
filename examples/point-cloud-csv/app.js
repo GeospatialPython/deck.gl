@@ -95,6 +95,7 @@ class Example extends PureComponent {
     this._getLimits = this._getLimits.bind(this)
     this._parseCSV = this._parseCSV.bind(this)
     this.toggleMenu = this.toggleMenu.bind(this)
+    this._buildTimeline = this._buildTimeline.bind(this)
     //  this._initVRDisplay = this._initVRDisplay.bind(this)
 
     this.state = {
@@ -130,19 +131,33 @@ class Example extends PureComponent {
       hasPosition: false,
       scale: {x: [-0.5, 0.5], y: [-0.5, 0.5], z: [-0.5, 0.5], s: [1, 10]},
       range: {x: [0, 1], y: [0, 1], z: [0, 1]},
+      limits: {xLimit: {min: 0, max: 1}, yLimit: {min: 0, max: 1}, zLimit: {min: 0, max: 1}},
+      gridLabels: {x: '', y: '', z: ''},
+      units: {
+        x: {type: 'append', value: 'units'},
+        y: {type: 'append', value: 'units'},
+        z: {type: 'append', value: 'units'},
+      },
+      labelHidden: false,
       vrViewports: this.getDefaultViewport(100, 100),
       menuVisible: false,
       datasets,
-      activeDataset: datasets[0],
-      scales: {},
+      activeDataset: datasets[1],
       time: {
         values: [],
         currentValue: null,
+        enabled: false,
         currentIndex: 0,
         speed: 1,
-        maxSpeed: 5
+        maxSpeed: 5,
+        timeline: [],
+        interval: 20,
+        isPlaying: false
       },
-      filters: []
+      filters: [],
+      system: {
+        busy: false
+      }
     }
     window.instance = this
     window.math = {Quaternion, Transform, Vec3}
@@ -171,6 +186,10 @@ class Example extends PureComponent {
     window.requestAnimationFrame(this._onUpdate)
   }
 
+  _timer(action) {
+
+  }
+
   _loadDataset (dataset = this.state.activeDataset, nextMapping = null) {
     const {_getPoints: getPoints} = this
     if (!dataset) {
@@ -178,10 +197,13 @@ class Example extends PureComponent {
       return
     }
 
-    this.setState({nextMapping})
+    this.setState({nextMapping, system: {busy: true}})
 
     getPoints(dataset, (points) => {
-      this.setState({points, progress: 1, activeDataset: dataset})
+      this.setState({
+        points, progress: 1, activeDataset: dataset,
+        system: {busy: false}
+      })
     })
   }
 
@@ -209,15 +231,13 @@ class Example extends PureComponent {
     const {meta} = dataset
     const {nextMapping} = this.state
     const mapping = nextMapping || meta.mapping
-    console.log('meta.map', meta.mapping)
-    console.log('nextMapping', nextMapping)
-    console.log('mapping', mapping)
-    const {range} = meta
+    const {range, scale, labels, units} = meta
     const {x, y, z, s, r, g, b, t, i} = mapping
     const {_getScale: getScale, _getLimits: getLimits} = this
-    const {xLimit, yLimit, zLimit, sLimit, bLimit} = getLimits(data, mapping)
+    const limits = getLimits(data, mapping)
+    const {xLimit, yLimit, zLimit, sLimit, bLimit} = limits
     const colorMultiplier = bLimit.max > 2 ? 1.0 : 255
-    const scaleRange = range.s || [sLimit.min, sLimit.max]
+    const scaleRange = range.s = range.s || [sLimit.min, sLimit.max]
     const points = []
     const filters = []
     const max = Math.max(...Object.values(mapping)) + 1
@@ -227,9 +247,9 @@ class Example extends PureComponent {
       const point = {}
 
       point.position = [
-        getScale(xLimit)(d[x]),
-        getScale(yLimit)(d[y]),
-        getScale(zLimit)(d[z])
+        getScale(xLimit, range.x, scale.x.type)(d[x]),
+        getScale(yLimit, range.y, scale.y.type)(d[y]),
+        getScale(zLimit, range.z, scale.z.type)(d[z])
       ]
 
       if (Math.max(r, g, b) < max) {
@@ -260,9 +280,17 @@ class Example extends PureComponent {
       points.push(point)
     }
 
-    let timeValues = []
+    const gridLabels = {}
 
-    if (t < max) {
+    gridLabels.x = labels[mapping.x]
+    gridLabels.y = labels[mapping.y]
+    gridLabels.z = labels[mapping.z]
+
+    let timeValues = [];
+    let timeline = [];
+    const hasTime = t < max;
+
+    if (hasTime) {
       filters.push({
         key: 'time',
         mappingIndex: t
@@ -276,29 +304,56 @@ class Example extends PureComponent {
       }
 
       timeValues = timeValues.filter(uniqueFilter).map(Number)
+
+      timeline = this._buildTimeline(points, timeValues.length)
     }
 
     this.setState({
       activeMapping: mapping,
       filters,
-      time: {values: timeValues, currentIndex: 0}
+      time: {enabled: hasTime, values: timeValues, currentIndex: 0, timeline},
+      range,
+      scale,
+      units,
+      limits,
+      gridLabels
     })
+    console.log('limits', limits)
+
     return points
+  }
+
+  _buildTimeline (points, frames) {
+    const timeline = new Array(frames);
+
+    for(let i = 0; i < points.length; i++) {
+      if(!timeline[points[i].time]) {
+        timeline[points[i].time] = []
+      }
+      timeline[points[i].time].push(points[i]);
+    }
+
+    return timeline
   }
 
   _applyFilters (points) {
     const {filters, time} = this.state
+
     if (filters && filters.length === 0) {
-      return points;
+      return points
     }
+
     let filteredPoints = []
+
     filters.forEach(filter => {
       if (filter.key === 'time') {
         const currentValue = time.values[time.currentIndex]
-        filteredPoints = points.filter(
-          point => (point[filter.key] === currentValue))
+        console.log('currentValue', currentValue)
+        console.log('time.timeline', time.timeline)
+        filteredPoints = time.timeline[currentValue]
       }
     })
+
     return filteredPoints
   }
 
@@ -331,6 +386,12 @@ class Example extends PureComponent {
       bMax = Math.max(bMax, point[b])
       sMax = Math.max(sMax, point[s])
     }
+
+    const xBuffer = (xMax - xMin) / 7;
+    const yBuffer = (yMax - yMin) / 7;
+    const zBuffer = (zMax - zMin) / 7;
+
+    const sBuffer = (xBuffer + yBuffer + zBuffer) / 3;
 
     return {
       xLimit: {min: xMin, max: xMax},
@@ -417,8 +478,12 @@ class Example extends PureComponent {
         }
         break
       case 'LB':
-        if (down && menuVisible) {
-          menu.navigate().prev()
+        if (down) {
+          if(menuVisible) {
+            menu.navigate().prev()
+          } else {
+            this.setState({labelHidden: !this.state.labelHidden})
+          }
         }
         break
     }
@@ -457,7 +522,7 @@ class Example extends PureComponent {
               time: {
                 ...time,
                 currentIndex: time.currentIndex + time.speed,
-                speed: time.speed
+                speed: time.speed + 40
               }
             })
           }
@@ -477,7 +542,7 @@ class Example extends PureComponent {
               time: {
                 ...time,
                 currentIndex: time.currentIndex - time.speed,
-                speed: time.speed
+                speed: time.speed + 40
               }
             })
           } else {
@@ -507,6 +572,24 @@ class Example extends PureComponent {
     return scaleLinear().domain([min, max]).range(range)
   }
 
+  _getScaleFor(range = [-0.5, 0.5], type = 'linear') {
+    return ({min, max}) => {
+      if (type === 'log') {
+        return scaleLog().domain([min, max]).range(range)
+      }
+      return scaleLinear().domain([min, max]).range(range)
+    }
+  }
+
+  _getUnitFormat(format) {
+    return (x) => {
+      if(format.type === 'append') {
+        return x.toFixed(2) + format.value
+      }
+      return x.toFixed(2)
+    }
+  }
+
   _onResize () {
     const size = {width: window.innerWidth, height: window.innerHeight}
     this.setState(size)
@@ -532,19 +615,29 @@ class Example extends PureComponent {
   }
 
   _onUpdate () {
+    const {system} = this.state
+    if (system.busy) {
+      console.log('System is busy.')
+      setTimeout(() => {
+        console.log('Trying again...')
+        this._onUpdate()
+    }, 1000)
+      return
+    }
     this.forceUpdate() // explicitly refresh state; removing this breaks frame update in VR
     window.requestAnimationFrame(this._onUpdate)
   }
 
   _renderCsvPointCloudLayer () {
-    const {points} = this.state
+    const {points, time} = this.state
+
     if (!points || points.length === 0) {
       return null
     }
 
     return new PointCloudLayer({
       id: 'laz-point-cloud-layer',
-      data: this._applyFilters(points),
+      data: time.enabled ? time.timeline[time.currentIndex]: points,
       coordinateSystem: COORDINATE_SYSTEM.IDENTITY,
       getPosition: d => d.position,
       // getSize: d => d.size,
@@ -647,13 +740,14 @@ class Example extends PureComponent {
 
   plotLayer () {
     const {_getScale: getScale} = this
-    const {points} = this.state
+    const {limits, range, scale, points, units, gridLabels, labelHidden} = this.state
+    const {xLimit, yLimit, zLimit} = limits
 
     return new PlotLayer({
       getColor: (x, y, z) => [40, z * 128 + 128, 160, 128],
-      getXScale: getScale,
-      getYScale: getScale,
-      getZScale: getScale,
+      getXScale: this._getScaleFor(range.x, scale.x.type),
+      getYScale: this._getScaleFor(range.z, scale.y.type),
+      getZScale: this._getScaleFor(range.y, scale.z.type),
       points,
       // vCount: resolution,
       drawAxes: true,
@@ -664,11 +758,13 @@ class Example extends PureComponent {
       pickable: true, // Boolean(this._onHover),
       onHover: this._onHover,
       onClick: this._onClick,
-      xTitle: 'GDP',
-      yTitle: 'Life Expectancy',
-      zTitle: 'Population',
-      xTickFormat: x => (x.toFixed(2)),
-      labelHidden: false
+      xTitle: gridLabels.x,
+      yTitle: gridLabels.z,
+      zTitle: gridLabels.y,
+      xTickFormat: this._getUnitFormat(units.x),
+      yTickFormat: this._getUnitFormat(units.z),
+      zTickFormat: this._getUnitFormat(units.y),
+      labelHidden
     })
   }
 
@@ -838,7 +934,7 @@ class Example extends PureComponent {
         position[1] += Math.abs(gamepad.cameraAxisZ) * resultVector.y
         position[2] += Math.abs(gamepad.cameraAxisZ) * resultVector.z
       }
-      return position.map(this.limitTo(2))
+      return position.map(this.limitTo(4))
     }
     if (_position) {
       return _position

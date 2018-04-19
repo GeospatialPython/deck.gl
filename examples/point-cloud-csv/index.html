@@ -1,40 +1,94 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset='UTF-8' />
+<head>
+    <meta charset='UTF-8'/>
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="/manifest.json">
     <title>point-cloud-example</title>
     <style>
-      body {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        -webkit-font-smoothing: antialiased;
-        margin:0;
-        padding:0;
-        overflow:hidden;
-        background: #111830;
-      }
-      .tooltip {
-        position: absolute;
-        padding: 4px;
-        background: rgba(0, 0, 0, 0.8);
-        color: #fff;
-        max-width: 300px;
-        font-size: 10px;
-        z-index: 9;
-        pointer-events: none;
-      }
-      * {
-        user-select: none;
-      }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 13px;
+            -webkit-font-smoothing: antialiased;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #111830;
+        }
+
+        .tooltip {
+            position: absolute;
+            padding: 4px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            max-width: 300px;
+            font-size: 10px;
+            z-index: 9;
+            pointer-events: none;
+        }
+
+        * {
+            user-select: none;
+        }
     </style>
     <link rel="stylesheet" href="css/user-interface.css">
     <script src='vr/webvr-polyfill.js'></script>
     <!--<script src="vr/aframe-master.js"></script>-->
-  </head>
-  <body/>
-    <script src='bundle.js'></script>
-    <div class="separator"></div>
-  </body>
+</head>
+<body/>
+
+<!--<div class="gaze-info-container">
+    <div class="stereoscopic-view-left">
+        <div class="gaze-info">
+            <div class="gaze-info-col">
+                <div class="point"></div>
+                <div class="label">Antartica</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">Size</div>
+                <div class="value">1.2</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">GDP</div>
+                <div class="value">112.88</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">Population:</div>
+                <div class="value">400012</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">Life Expectancy</div>
+                <div class="value">50</div>
+            </div>
+        </div>
+    </div>
+    <div class="stereoscopic-view-right">
+        <div class="gaze-info">
+            <div class="gaze-info-col">
+                <div class="point"></div>
+                <div class="label">Antartica</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">Size</div>
+                <div class="value">1.2</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">GDP</div>
+                <div class="value">112.88</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">Population:</div>
+                <div class="value">400012</div>
+            </div>
+            <div class="gaze-info-row">
+                <div class="label">Life Expectancy</div>
+                <div class="value">50</div>
+            </div>
+        </div>
+    </div>
+</div>-->
+
+<script src='bundle.js'></script>
+<div class="separator"></div>
+</body>
 </html>

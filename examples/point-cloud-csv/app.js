@@ -1,6 +1,7 @@
 /* global document, window, navigator */
 /* eslint-disable no-console,no-undef */
 import React, { PureComponent } from 'react'
+import { createElement, cloneElement } from 'react'
 import { render } from 'react-dom'
 import DeckGL, {
   COORDINATE_SYSTEM,
@@ -96,7 +97,10 @@ class Example extends PureComponent {
     this._parseCSV = this._parseCSV.bind(this)
     this.toggleMenu = this.toggleMenu.bind(this)
     this._buildTimeline = this._buildTimeline.bind(this)
-    //  this._initVRDisplay = this._initVRDisplay.bind(this)
+    this._timer = this._timer.bind(this)
+    this._tick = this._tick.bind(this)
+    this._targetToString = this._targetToString.bind(this)
+    this._infoToString = this._infoToString.bind(this)
 
     this.state = {
       width: 0,
@@ -104,6 +108,7 @@ class Example extends PureComponent {
       points: [],
       progress: 0,
       rotating: false,
+      deckRef: null,
       viewport: {
         lookAt: [0, 0, 0],
         distance: 1,
@@ -131,19 +136,24 @@ class Example extends PureComponent {
       hasPosition: false,
       scale: {x: [-0.5, 0.5], y: [-0.5, 0.5], z: [-0.5, 0.5], s: [1, 10]},
       range: {x: [0, 1], y: [0, 1], z: [0, 1]},
-      limits: {xLimit: {min: 0, max: 1}, yLimit: {min: 0, max: 1}, zLimit: {min: 0, max: 1}},
+      limits: {
+        xLimit: {min: 0, max: 1},
+        yLimit: {min: 0, max: 1},
+        zLimit: {min: 0, max: 1}
+      },
       gridLabels: {x: '', y: '', z: ''},
       units: {
         x: {type: 'append', value: 'units'},
         y: {type: 'append', value: 'units'},
-        z: {type: 'append', value: 'units'},
+        z: {type: 'append', value: 'units'}
       },
       labelHidden: false,
       vrViewports: this.getDefaultViewport(100, 100),
       menuVisible: false,
       datasets,
-      activeDataset: datasets[1],
+      activeDataset: datasets[0],
       time: {
+        lastDataset: null,
         values: [],
         currentValue: null,
         enabled: false,
@@ -152,7 +162,14 @@ class Example extends PureComponent {
         maxSpeed: 5,
         timeline: [],
         interval: 20,
-        isPlaying: false
+        isPlaying: false,
+        intervalId: 0,
+        startIndex: 0,
+        endIndex: 0
+      },
+      gaze: {
+        active: false,
+        target: null
       },
       filters: [],
       system: {
@@ -186,8 +203,66 @@ class Example extends PureComponent {
     window.requestAnimationFrame(this._onUpdate)
   }
 
-  _timer(action) {
+  _tick () {
+    const {time} = this.state
+    const {currentIndex, endIndex, isPlaying} = time
+    if (!time.enabled) {
+      return
+    }
+    if (isPlaying) {
+      if (currentIndex < endIndex) {
+        time.currentIndex += 1
+        this.setState({
+          time
+        })
+      } else if (currentIndex >= endIndex) {
+        time.currentIndex = endIndex
+        this._timer().stop()
+      }
+    } else {
+      this._timer().stop()
+    }
+    console.log('tick')
+  }
 
+  _timer () {
+    const {time} = this.state
+    return {
+      play: () => {
+        const {intervalId, interval, isPlaying} = time
+        if (!isPlaying) {
+          clearInterval(intervalId)
+          time.isPlaying = true
+          time.intervalId = setInterval(this._tick, interval)
+          this.setState({time})
+        }
+        console.info('[+] play >')
+      },
+      stop: () => {
+        const {intervalId} = time
+        clearInterval(intervalId)
+        console.info('[+] stop x')
+        time.isPlaying = false
+        this.setState({time})
+      },
+      reset: () => {
+        const {startIndex} = time
+        time.currentIndex = startIndex
+        this.setState({time})
+        console.info('[+] reset x')
+        this._timer().stop()
+      },
+      toggleAnimation: () => {
+        console.info('[+] toggle ')
+        const {isPlaying} = time
+        console.info('[+] isPlaying ', isPlaying)
+        if (isPlaying) {
+          this._timer().stop()
+        } else {
+          this._timer().play()
+        }
+      }
+    }
   }
 
   _loadDataset (dataset = this.state.activeDataset, nextMapping = null) {
@@ -228,12 +303,12 @@ class Example extends PureComponent {
 
   _parseCSV (csv, dataset) {
     const {data} = csv
-    const {meta} = dataset
+    const {meta, file} = dataset
     const {nextMapping} = this.state
     const mapping = nextMapping || meta.mapping
     const {range, scale, labels, units} = meta
     const {x, y, z, s, r, g, b, t, i} = mapping
-    const {_getScale: getScale, _getLimits: getLimits} = this
+    const {_getScale: getScale, _getLimits: getLimits, _getInverseScale: getInverseScale} = this
     const limits = getLimits(data, mapping)
     const {xLimit, yLimit, zLimit, sLimit, bLimit} = limits
     const colorMultiplier = bLimit.max > 2 ? 1.0 : 255
@@ -285,12 +360,13 @@ class Example extends PureComponent {
     gridLabels.x = labels[mapping.x]
     gridLabels.y = labels[mapping.y]
     gridLabels.z = labels[mapping.z]
+    gridLabels.s = labels[mapping.s]
 
-    let timeValues = [];
-    let timeline = [];
-    const hasTime = t < max;
-
+    let timeValues = []
+    let timeline = []
+    const hasTime = t < max
     if (hasTime) {
+
       filters.push({
         key: 'time',
         mappingIndex: t
@@ -309,28 +385,37 @@ class Example extends PureComponent {
     }
 
     this.setState({
-      activeMapping: mapping,
-      filters,
-      time: {enabled: hasTime, values: timeValues, currentIndex: 0, timeline},
-      range,
-      scale,
-      units,
-      limits,
-      gridLabels
-    })
+        activeMapping: mapping,
+        filters,
+        range,
+        scale,
+        units,
+        limits,
+        gridLabels,
+        time: {
+          enabled: hasTime,
+          currentIndex: 0,
+          startIndex: timeValues[0],
+          endIndex: timeValues[timeValues.length - 1],
+          values: timeValues,
+          timeline,
+          isPlaying: false
+        }
+      }
+    )
     console.log('limits', limits)
 
     return points
   }
 
   _buildTimeline (points, frames) {
-    const timeline = new Array(frames);
+    const timeline = new Array(frames)
 
-    for(let i = 0; i < points.length; i++) {
-      if(!timeline[points[i].time]) {
+    for (let i = 0; i < points.length; i++) {
+      if (!timeline[points[i].time]) {
         timeline[points[i].time] = []
       }
-      timeline[points[i].time].push(points[i]);
+      timeline[points[i].time].push(points[i])
     }
 
     return timeline
@@ -386,12 +471,6 @@ class Example extends PureComponent {
       bMax = Math.max(bMax, point[b])
       sMax = Math.max(sMax, point[s])
     }
-
-    const xBuffer = (xMax - xMin) / 7;
-    const yBuffer = (yMax - yMin) / 7;
-    const zBuffer = (zMax - zMin) / 7;
-
-    const sBuffer = (xBuffer + yBuffer + zBuffer) / 3;
 
     return {
       xLimit: {min: xMin, max: xMax},
@@ -473,17 +552,61 @@ class Example extends PureComponent {
         }
         break
       case 'RB':
-        if (down && menuVisible) {
-          menu.navigate().next()
+        if (down) {
+          if (menuVisible) {
+            menu.navigate().next()
+          } else {
+            const {gaze} = this.state
+            this.setState({
+              gaze: {
+                ...gaze,
+                active: true
+              }
+            })
+            const {width, height} = this.state
+            const {deckGL} = this
+            const gazePoint = {x: width / 4, y: height / 2}
+            if (deckGL) {
+              const pickedObject = deckGL.pickObject(gazePoint, 10)
+              if (pickedObject) {
+                console.log('picked', pickedObject)
+              }
+              this.setState({
+                gaze: {
+                  active: true,
+                  target: pickedObject
+                }
+              })
+            } else {
+              console.log('deckGL is undefined')
+            }
+          }
+        } else {
+          this.setState({
+            gaze: {
+              active: false,
+              target: null
+            }
+          })
         }
         break
       case 'LB':
         if (down) {
-          if(menuVisible) {
+          if (menuVisible) {
             menu.navigate().prev()
           } else {
             this.setState({labelHidden: !this.state.labelHidden})
           }
+        }
+        break
+      case 'LS':
+        if (down) {
+          this._timer().reset()
+        }
+        break
+      case 'Start':
+        if (down) {
+          this._timer().toggleAnimation()
         }
         break
     }
@@ -572,7 +695,14 @@ class Example extends PureComponent {
     return scaleLinear().domain([min, max]).range(range)
   }
 
-  _getScaleFor(range = [-0.5, 0.5], type = 'linear') {
+  _getInverseScale ({min, max}, range = [-0.5, 0.5], type = 'linear') {
+    if (type === 'log') {
+      return scaleLog().domain([range[0], range[1]]).range([min, max])
+    }
+    return scaleLinear().domain([range[0], range[1]]).range([min, max])
+  }
+
+  _getScaleFor (range = [-0.5, 0.5], type = 'linear') {
     return ({min, max}) => {
       if (type === 'log') {
         return scaleLog().domain([min, max]).range(range)
@@ -581,9 +711,9 @@ class Example extends PureComponent {
     }
   }
 
-  _getUnitFormat(format) {
+  _getUnitFormat (format) {
     return (x) => {
-      if(format.type === 'append') {
+      if (format.type === 'append') {
         return x.toFixed(2) + format.value
       }
       return x.toFixed(2)
@@ -605,6 +735,20 @@ class Example extends PureComponent {
       // clearColor: [0.07, 0.14, 0.19, 0]
       // blendFunc: [gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA],
     })
+    const {width, height} = this.state
+    const gazePoint = {x: width / 4, y: height / 2}
+    const {deckGL} = this
+    setInterval(() => {
+      const {gaze} = this.state
+      if (gaze.active && deckGL) {
+        this.setState({
+          gaze: {
+            active: true,
+            target: deckGL.pickObject(gazePoint, 10)
+          }
+        })
+      }
+    }, 100)
   }
 
   _onViewportChange (viewport) {
@@ -621,7 +765,7 @@ class Example extends PureComponent {
       setTimeout(() => {
         console.log('Trying again...')
         this._onUpdate()
-    }, 1000)
+      }, 1000)
       return
     }
     this.forceUpdate() // explicitly refresh state; removing this breaks frame update in VR
@@ -637,7 +781,7 @@ class Example extends PureComponent {
 
     return new PointCloudLayer({
       id: 'laz-point-cloud-layer',
-      data: time.enabled ? time.timeline[time.currentIndex]: points,
+      data: time.enabled ? time.timeline[time.currentIndex] : points,
       coordinateSystem: COORDINATE_SYSTEM.IDENTITY,
       getPosition: d => d.position,
       // getSize: d => d.size,
@@ -797,6 +941,7 @@ class Example extends PureComponent {
           layers={[this.plotLayer(), this._renderCsvPointCloudLayer()]}
           onWebGLInitialized={this._onInitialized}
           onLayerClick={this._onClick}
+          ref={deck => { this.deckGL = deck }}
         />
       )
     }
@@ -947,15 +1092,91 @@ class Example extends PureComponent {
       Math.sign(value)
   }
 
+  _targetToString (target) {
+    if (!target) {
+      return ''
+    }
+    const {_getInverseScale: getInvScale} = this
+    const {gridLabels, range, scale, units, limits} = this.state
+    const {xLimit, yLimit, zLimit, sLimit} = limits
+    const attrib = target.object
+    let title = ''
+    let color = 'rgb(255, 255, 255)'
+    const info = []
+
+    if (attrib.position) {
+      const xValue = getInvScale(xLimit, range.x, scale.x.type)(
+        attrib.position[0])
+      info.push([gridLabels.x, xValue])
+      const yValue = getInvScale(yLimit, range.y, scale.y.type)(
+        attrib.position[1])
+      info.push([gridLabels.y, yValue])
+      const zValue = getInvScale(zLimit, range.z, scale.z.type)(
+        attrib.position[2])
+      info.push([gridLabels.z, zValue])
+    }
+    if (attrib.size) {
+      const sValue = getInvScale(sLimit, range.s)(
+        attrib.size)
+      info.push([gridLabels.s, sValue])
+    }
+    if (attrib.info) {
+      title = attrib.info.slice(0, 10)
+    }
+    if (attrib.color) {
+      color = 'rgb(' + attrib.color.join(', ') + ')'
+    }
+    return this._infoToString(info, title, color)
+  }
+
+  _infoToString (info, title, color) {
+    if (!info) {
+      return ''
+    }
+    const pointEl = createElement('div', {
+      className: 'point', style: {
+        backgroundColor: color
+      }
+    })
+    const gazeInfoChildren = []
+
+    const label = createElement('div', {className: 'label'}, title)
+    const gazeInfoCol = createElement('div', {className: 'gaze-info-col'},
+      pointEl, label)
+
+    gazeInfoChildren.push(gazeInfoCol)
+
+    info.forEach((e) => {
+      const labelEl = createElement('div', {className: 'label'}, e[0])
+      const valueEl = createElement('div', {className: 'value'}, e[1])
+      gazeInfoChildren.push(createElement('div', {className: 'gaze-info-row'},
+        labelEl, valueEl))
+    })
+
+    const gazeInfoEl = createElement('div', {className: 'gaze-info'},
+      ...gazeInfoChildren)
+
+    const stereoscopicViewLeft = createElement('div',
+      {className: 'stereoscopic-view-left'}, gazeInfoEl)
+    const stereoscopicViewRight = createElement('div',
+      {className: 'stereoscopic-view-right'}, gazeInfoEl)
+
+    return createElement('div',
+      {className: 'gaze-info-container'}, stereoscopicViewLeft,
+      stereoscopicViewRight)
+  }
+
   render () {
-    const {width, height, menuVisible, activeDataset} = this.state
+    const {width, height, menuVisible, activeDataset, gaze} = this.state
     if (width <= 0 || height <= 0) {
       return null
     }
 
     return (
       <div
-        className={menuVisible ? 'menu-layer--visible' : 'menu-layer--hidden'}>
+        className={menuVisible
+          ? 'menu-layer--visible'
+          : 'menu-layer--hidden'}>
         {this._renderDeckGLCanvas()}
         {this._renderProgressInfo()}
         <MenuLayer
@@ -970,6 +1191,9 @@ class Example extends PureComponent {
           toggleMenu={this.toggleMenu}
           activeDataset={activeDataset}
         />
+        {gaze.active ? <div className={'gaze gaze-left'}/> : ''}
+        {gaze.active ? <div className={'gaze gaze-right'}/> : ''}
+        {gaze.active && gaze.target ? this._targetToString(gaze.target) : ''}
       </div>
     )
   }
@@ -979,4 +1203,7 @@ const root = document.createElement('div')
 root.id = 'root'
 document.body.appendChild(root)
 
-render(<Example/>, root)
+render(
+  <Example/>,
+  root
+)

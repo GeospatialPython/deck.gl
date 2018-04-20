@@ -65,7 +65,7 @@ export const datasets = [
     filetype: 'csv',
     focused: false,
     meta: {
-      mapping: {x: 0, y: 2, z: 1, s: 3, r: 4, g: 5, b: 6},
+      mapping: {x: 0, y: 2, z: 1, s: 3, r: 4, g: 5, b: 6, i: 8},
       labels: {
         0: 'GDP (US$)',
         1: 'Life Expectancy (years)',
@@ -73,7 +73,8 @@ export const datasets = [
         3: 'Size',
         4: 'Red',
         5: 'Blue',
-        6: 'Green'
+        6: 'Green',
+        8: 'Country'
       },
       units: {
         x: {type: 'append', value: ''},

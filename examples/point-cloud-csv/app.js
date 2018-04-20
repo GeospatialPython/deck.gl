@@ -1166,18 +1166,18 @@ class Example extends PureComponent {
     if (attrib.position) {
       const xValue = getInvScale(xLimit, range.x)(
         attrib.position[0])
-      info.push([gridLabels.x, xValue])
+      info.push([gridLabels.x, xValue.toFixed(2)])
       const yValue = getInvScale(yLimit, range.y)(
         attrib.position[1])
-      info.push([gridLabels.y, yValue])
+      info.push([gridLabels.y, yValue.toFixed(2)])
       const zValue = getInvScale(zLimit, range.z)(
         attrib.position[2])
-      info.push([gridLabels.z, zValue])
+      info.push([gridLabels.z, zValue.toFixed(2)])
     }
     if (attrib.size) {
       const sValue = getInvScale(sLimit, range.s)(
         attrib.size)
-      info.push([gridLabels.s, sValue])
+      info.push([gridLabels.s, sValue.toFixed(2)])
     }
     if (attrib.info) {
       title = attrib.info.slice(0, 10)

@@ -147,5 +147,43 @@ export const datasets = [
       },
       range: DEFAULT_RANGES
     }
+  },
+  {
+    id: 4,
+    name: 'World Happiness',
+    description: 'Health, Life, Expectancy',
+    file: './datasets/happiness_2017.csv',
+    filetype: 'csv',
+    focused: false,
+    meta: {
+      mapping: {i: 0, s: 7, x: 5, y: 6, g: 8, b: 7, z: 2, r: 10},
+      labels: {
+        0: 'Country',
+        2: 'Happiness Score',
+        5: 'Economy GDP per Capita',
+        6: 'Family',
+        7: 'Health Life Expectancy',
+        8: 'Freedom',
+        9: 'Generosity',
+        10: 'Trust Government Corruption'
+      },
+      units: {
+        x: {type: 'append', value: ''},
+        y: {type: 'append', value: ''},
+        z: {type: 'append', value: ''}
+      },
+      scale: {
+        x: DEFAULT_SCALE,
+        y: DEFAULT_SCALE,
+        z: DEFAULT_SCALE
+      },
+      range: {
+        ...DEFAULT_RANGES,
+        s: [0.5, 10],
+        x: [-1.5, 1.5],
+        y: [-1.5, 1.5],
+        z: [-1.5, 1.5]
+      }
+    }
   }
 ]

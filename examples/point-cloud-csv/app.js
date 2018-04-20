@@ -103,6 +103,7 @@ class Example extends PureComponent {
     this._tick = this._tick.bind(this)
     this._targetToString = this._targetToString.bind(this)
     this._infoToString = this._infoToString.bind(this)
+    this._getDenormalizedValue = this._getDenormalizedValue.bind(this)
 
     this.state = {
       width: 0,
@@ -758,13 +759,28 @@ class Example extends PureComponent {
     }
   }
 
-  _getUnitFormat (format) {
+  _getUnitFormat (format, dimension) {
+    const {_getDenormalizedValue: denormalize} = this;
     return (x) => {
       if (format.type === 'append') {
-        return x.toFixed(2) + format.value
+        return (denormalize(x, dimension)).toFixed(2) + format.value
       }
-      return x.toFixed(2)
+      return (denormalize(x, dimension)).toFixed(2)
     }
+  }
+
+  _getDenormalizedValue(value, dimension) {
+    const {_getInverseScale: getInverseScale} = this;
+    const {xLimit, yLimit, zLimit} = this.state.limits;
+    const {range} = this.state;
+    if (dimension === 'x') {
+      return getInverseScale(xLimit, range.x)(value)
+    } else if (dimension === 'y') {
+      return getInverseScale(yLimit, range.y)(value)
+    } else if (dimension === 'z') {
+      return getInverseScale(zLimit, range.z)(value)
+    }
+    return value;
   }
 
   _onResize () {
@@ -787,7 +803,7 @@ class Example extends PureComponent {
     const {deckGL} = this
     setInterval(() => {
       const {activeDataset, gaze} = this.state
-      if (activeDataset.filetype !== 'laz' && gaze.active && deckGL) {
+      if (gaze.active && deckGL) {
         this.setState({
           gaze: {
             active: true,
@@ -846,7 +862,8 @@ class Example extends PureComponent {
       getPosition: d => d.position,
       getNormal: d => [0, 0.5, 0.2],
       getColor: d => [255, 255, 255, 5],
-      radiusPixels: 0.1
+      radiusPixels: 0.1,
+      pickable: true
     });
   }
 
@@ -963,9 +980,9 @@ class Example extends PureComponent {
       xTitle: gridLabels.x,
       yTitle: gridLabels.z,
       zTitle: gridLabels.y,
-      xTickFormat: this._getUnitFormat(units.x),
-      yTickFormat: this._getUnitFormat(units.z),
-      zTickFormat: this._getUnitFormat(units.y),
+      xTickFormat: this._getUnitFormat(units.x, 'x'),
+      yTickFormat: this._getUnitFormat(units.z, 'z'),
+      zTickFormat: this._getUnitFormat(units.y, 'y'),
       labelHidden
     })
   }
@@ -1058,7 +1075,7 @@ class Example extends PureComponent {
               <div>{`Loading ${progress}%`}</div>
             </div>
           ) : (
-            <div>Data source: CSV</div>
+            <div></div>
           )}
         </div>
         <div
